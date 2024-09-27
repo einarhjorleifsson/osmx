@@ -1,0 +1,11 @@
+Package: osmx
+Title: Visualize survey data
+Version: 0.0.0.9000
+Authors@R: 
+    person("Einar", "Hjorleifsson", , "einar.hjorleifsson@gmail.com", role = c("aut", "cre"),
+           comment = c(ORCID = "YOUR-ORCID-ID"))
+Description: The packages allows for merging of historical and current survey data. In addition a shiny template is included for visualizations.
+License: CC BY 4.0
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.1
