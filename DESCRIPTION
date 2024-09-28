@@ -8,4 +8,10 @@ Description: The packages allows for merging of historical and current survey da
 License: CC BY 4.0
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.1
+RoxygenNote: 7.3.2
+Config/Needs/website: rmarkdown
+Imports: 
+    dplyr,
+    ggplot2,
+    mardata,
+    tidyr
