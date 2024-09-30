@@ -22,6 +22,6 @@ Imports:
 Suggests:
     mardata
 Remotes: 
-    einarhjorleifsson/ovog
+    einarhjorleifsson/ovog,
     hafro/geo
     
