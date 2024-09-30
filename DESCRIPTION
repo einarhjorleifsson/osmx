@@ -12,6 +12,16 @@ RoxygenNote: 7.3.2
 Config/Needs/website: rmarkdown
 Imports: 
     dplyr,
+    geo,
     ggplot2,
-    mardata,
+    knitr,
+    lubridate,
+    ovog,
+    tibble,
     tidyr
+Suggests:
+    mardata
+Remotes: 
+    einarhjorleifsson/ovog
+    hafro/geo
+    

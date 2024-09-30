@@ -7,7 +7,7 @@
 #' @export
 #'
 sm_standardize_by_tow <- function(res, tow = c(2, 4, 8)) {
-  
+
   res$LE <- 
     res$LE |> 
     dplyr::left_join(res$ST |> 
@@ -23,4 +23,51 @@ sm_standardize_by_tow <- function(res, tow = c(2, 4, 8)) {
   
   return(res)
   
+}
+
+
+
+#' Calculate coordinates
+#'
+#' @param res A list
+#'
+#' @return A list
+#' @export
+#'
+sm_calc_coords <- function(res) {
+  
+  res$ST <-
+    res$ST |> 
+    dplyr::mutate(lon1 = -kastad_v_lengd,
+                  lat1 =  kastad_n_breidd,
+                  lon2 = -hift_v_lengd,
+                  lat2 =  hift_n_breidd,
+                  lon = dplyr::case_when(is.na(lon2) ~ lon1,
+                                         !is.na(lon1) & !is.na(lon2) ~ (lon1 + lon2) / 2,
+                                         .default = lon1),
+                  lat = dplyr::case_when(is.na(lat2) ~ lat1,
+                                         !is.na(lat1) & !is.na(lat2) ~ (lat1 + lat2) / 2,
+                                         .default = lat1))  
+  
+  return(res)
+  
+}
+
+#' Add coordinates to length data
+#'
+#' @param res A list
+#'
+#' @return A list
+#' @export
+#'
+sm_add_coords_to_length <- function(res) {
+  
+  res$LE <- 
+    res$LE |> 
+    dplyr::left_join(res$ST |>
+                       dplyr::select(ar, index, lon, lat),
+                     by = dplyr::join_by(ar, index))
+  
+  return(res)
+
 }

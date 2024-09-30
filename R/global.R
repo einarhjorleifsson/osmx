@@ -30,6 +30,8 @@ utils::globalVariables(
     
     "Name",
     
+    "lower.ci", "upper.ci", "val", "id", "osl", "sl",
+    
     "."))
 
 
