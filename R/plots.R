@@ -67,9 +67,14 @@ sm_bubble_plot <- function(d) {
                            .default = "what")
   
   sm_bubble_plot_base() +
-    ggplot2::geom_point(data = d,
+    ggplot2::geom_point(data = d |> dplyr::filter(val == 0),
+                        ggplot2::aes(lon, lat),
+                        colour = "blue",
+                        size = 0.2) +
+    ggplot2::geom_point(data = d |> dplyr::filter(val > 0),
                         ggplot2::aes(lon, lat, size = val),
-                        alpha = 0.25, colour = "red") +
+                        alpha = 0.25,
+                        colour = "red") +
     ggplot2::labs(x = NULL, y = NULL, size = zlab) +
     ggplot2::facet_wrap(~ ar, nrow = 3)
   
@@ -99,4 +104,82 @@ sm_boot_plot <- function(d) {
     ggplot2::guides(x = ggplot2::guide_axis(n.dodge = 2))
   
   
+}
+
+
+#' Length ungutted weight qc-plot
+#'
+#' @param res list of munged hafvog's tables
+#' @param species Numerical, species to plot
+#'
+#' @return A plot
+#' @export
+#'
+sm_luw_plot <- function(res, species = 1) {
+  
+  d <- 
+    res$kv.this.year |> 
+    dplyr::filter(tegund == species)
+  ggplot2::ggplot() +
+    ggplot2::theme_grey(base_size = 16) +
+    ggplot2::geom_ribbon(data = res$qc$lw |> 
+                           dplyr::filter(tegund == species),
+                         ggplot2::aes(lengd, ymin = osl1, ymax = osl2),
+                         fill = "pink") +
+    ggplot2::geom_point(data = d |> 
+                          dplyr::filter(ok.l.osl),
+                        ggplot2::aes(lengd, oslaegt), 
+                        size = 1, alpha = 0.5, colour = "blue") +
+    ggplot2::geom_point(data = d |> dplyr::filter(!ok.l.osl), 
+                        ggplot2::aes(lengd, oslaegt), colour = "red") +
+    ggrepel::geom_text_repel(data = d |> dplyr::filter(!ok.l.osl), 
+                             ggplot2::aes(lengd, oslaegt, label = stod_knr)) +
+    ggplot2::scale_x_log10(breaks = c(seq(5, 50, by = 5), seq(60, 100, by = 10), 120, 140, 160, 200)) +
+    ggplot2::scale_y_log10(breaks = c(seq(5, 50, by = 5),
+                                      seq(60, 100, by = 10),
+                                      seq(120, 200, by = 20),
+                                      seq(300, 1000, by = 100),
+                                      seq(1500, 10000, by = 500),
+                                      seq(15000, 30000, by = 1000))) +
+    ggplot2::coord_cartesian(xlim = range(d$lengd, na.rm = TRUE),
+                             ylim = range(d$oslaegt, na.rm = TRUE))
+}
+
+
+#' Length gutted weight qc-plot
+#'
+#' @param res list of munged hafvog's tables
+#' @param species Numerical, species to plot
+#'
+#' @return A plot
+#' @export
+#'
+sm_lgw_plot <- function(res, species = 1) {
+  
+  d <- 
+    res$kv.this.year |> 
+    dplyr::filter(tegund == species)
+  ggplot2::ggplot() +
+    ggplot2::theme_grey(base_size = 16) +
+    ggplot2::geom_ribbon(data = res$qc$lw |> 
+                           dplyr::filter(tegund == species),
+                         ggplot2::aes(lengd, ymin = sl1, ymax = sl2),
+                         fill = "pink") +
+    ggplot2::geom_point(data = d |> 
+                          dplyr::filter(ok.l.sl),
+                        ggplot2::aes(lengd, slaegt), 
+                        size = 1, alpha = 0.5, colour = "blue") +
+    ggplot2::geom_point(data = d |> dplyr::filter(!ok.l.sl), 
+                        ggplot2::aes(lengd, slaegt), colour = "red") +
+    ggrepel::geom_text_repel(data = d |> dplyr::filter(!ok.l.sl), 
+                             ggplot2::aes(lengd, oslaegt, label = stod_knr)) +
+    ggplot2::scale_x_log10(breaks = c(seq(5, 50, by = 5), seq(60, 100, by = 10), 120, 140, 160, 200)) +
+    ggplot2::scale_y_log10(breaks = c(seq(5, 50, by = 5),
+                                      seq(60, 100, by = 10),
+                                      seq(120, 200, by = 20),
+                                      seq(300, 1000, by = 100),
+                                      seq(1500, 10000, by = 500),
+                                      seq(15000, 30000, by = 1000))) +
+    ggplot2::coord_cartesian(xlim = range(d$lengd, na.rm = TRUE),
+                             ylim = range(d$oslaegt, na.rm = TRUE))
 }

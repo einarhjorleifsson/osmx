@@ -28,6 +28,7 @@ utils::globalVariables(
     "s_kynthroski", "s_kvarnanr", "s_nr", "s_oslaegt", "s_slaegt", "s_magaastand", "s_lifur",
     "s_kynfaeri", "s_tegund_as_faedutegund", "s_radnr", "s_ranfiskurteg", "s_heildarthyngd",
     
+    "ok.l.osl", "ok.l.sl", "stod_knr",
     "Name",
     
     "lower.ci", "upper.ci", "val", "id", "osl", "sl",

@@ -104,8 +104,10 @@ sm_read_historical <- function(years, sample_class) {
     # some odd measure
     dplyr::filter(!(ar == 1993 & index == 6660273 & tegund == 41 & is.na(r))) |> 
     dplyr::filter(!(ar == 1986 & index == 5630273 & tegund == 19 & is.na(lengd)))
-  if(any(is.na(LE$r))) stop("Unexpected: Raising factor (r) in object LE is na")
-  if(any(is.na(LE$lengd))) stop("Unexpected: Undefined lengd in object LE")
+  
+  # NOTE: This happens e.g. if one gets a zero station
+  # if(any(is.na(LE$r))) stop("Unexpected: Raising factor (r) in object LE is na")
+  # if(any(is.na(LE$lengd))) stop("Unexpected: Undefined lengd in object LE")
   
   KV <-
     ST |> 

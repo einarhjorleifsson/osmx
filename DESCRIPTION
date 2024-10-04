@@ -1,6 +1,6 @@
 Package: osmx
 Title: Visualize survey data
-Version: 0.0.0.9000
+Version: 2024-10-04
 Authors@R: 
     person("Einar", "Hjorleifsson", , "einar.hjorleifsson@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "YOUR-ORCID-ID"))
@@ -14,14 +14,17 @@ Imports:
     dplyr,
     geo,
     ggplot2,
+    ggrepel,
     knitr,
     lubridate,
     ovog,
     tibble,
-    tidyr
+    tidyr,
+    tidyselect
 Suggests:
-    mardata
+    mardata,
+    rmarkdown
 Remotes: 
     einarhjorleifsson/ovog,
     hafro/geo
-    
+VignetteBuilder: knitr

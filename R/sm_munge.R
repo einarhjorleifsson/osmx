@@ -1,3 +1,9 @@
+#remotes::install_github("einarhjorleifsson/ovog")
+#devtools::load_all()
+#cruises <- c("TB2-2024", "TTH1-2024")
+#maelingar <- c("data-raw/SMH/TB2-2024.zip", "data-raw/SMH/TTH1-2024.zip")
+#stillingar <- c("data-raw/SMH/stillingar_SMH_rall_(haust).zip")
+
 #' Prepares data for the smxapp
 #'
 #' @param maelingar Names of hafvog zip files to be imported
@@ -19,7 +25,7 @@ sm_munge <- function(maelingar, stillingar, current.year = lubridate::year(lubri
     stop("Fix the file path of measurement files")
   }
   res <-
-    ovog::hv_read_zips(maelingar, collapse_station = TRUE) |> 
+    ovog::hv_read_cruise(maelingar, collapse_station = TRUE) |> 
     ovog::hv_create_tables(scale = TRUE) |> 
     sm_standardize_by_tow(tow = c(2, 4, 8)) |> 
     sm_calc_coords() |> 
@@ -41,9 +47,10 @@ sm_munge <- function(maelingar, stillingar, current.year = lubridate::year(lubri
       knitr::kable(caption = "List of files to import and if they exist or not")
     stop("Fix the file path of setup files")
   }
-  res$stillingar <- ovog::js_stillingar_all(stillingar)
+  res$stillingar <- ovog::hv_read_stillingar(stillingar)
   
-  
+  # TEST
+  # Is sample class in stillingar the same as in cruise
   
   
   ## Historical measurments ----------------------------------------------------
@@ -62,7 +69,6 @@ sm_munge <- function(maelingar, stillingar, current.year = lubridate::year(lubri
   coloured_print("Combining data", colour = "green")
   
   index.done <- res$ST |> dplyr::filter(ar == current.year) |> dplyr::pull(index)
-  
   
   res$ST <- dplyr::bind_rows(res$ST, history$ST |> dplyr::filter(index %in% index.done))
   res$LE <- dplyr::bind_rows(res$LE, history$LE |> dplyr::filter(index %in% index.done))
@@ -157,63 +163,48 @@ sm_munge <- function(maelingar, stillingar, current.year = lubridate::year(lubri
     dplyr::filter(!is.na(value))
   
   # tidy stillingar ------------------------------------------------------------
-  coloured_print("'Stillingar' ", colour = "green")
+  coloured_print("Tidy 'Stillingar' ", colour = "green")
   ## LW ------------------------------------------------------------------------
   coloured_print("'Length-weight' ", colour = "green")
-  res$stillingar$fiskteg_lengd_thyngd <- 
-    res$stillingar$fiskteg_lengd_thyngd |> 
-    dplyr::rename(tegund = fisktegund_id) |> 
-    dplyr::mutate(fravik = fravik/100)
-  x <-
-    res$stillingar$fiskteg_lengd_thyngd |> 
-    dplyr::group_by(tegund) |>
-    dplyr::reframe(l.max = max(lengd))
-  
   res$qc <- list()
-  res$qc$lw <-
-    expand.grid(tegund = unique(res$stillingar$fiskteg_lengd_thyngd$tegund),
-              # This is a bit too much
-              lengd = 1:1500) |>
-    dplyr::as_tibble() |>
-    dplyr::left_join(x, by = "tegund") |>
-    dplyr::filter(lengd <= l.max) |>
-    dplyr::select(-l.max) |>
-    dplyr::left_join(res$stillingar$fiskteg_lengd_thyngd, 
-                     by = dplyr::join_by(tegund, lengd)) |>
-    dplyr::arrange(tegund, -lengd) |>
-    dplyr::group_by(tegund) |>
-    tidyr::fill(fravik:slaegt_a) |>
-    dplyr::ungroup() |>
-    dplyr:: mutate(osl = oslaegt_a * lengd^oslaegt_b,
-                   sl = slaegt_a * lengd^slaegt_b) |> 
-    dplyr::arrange(tegund, lengd) |> 
-    dplyr::mutate(osl1 = osl * (1 - fravik),
-                  osl2 = osl * (1 + fravik),
-                  sl1 = sl * (1 - fravik),
-                  sl2 = sl * (1 + fravik)) |>
-    dplyr::select(tegund, lengd, osl1:sl2)
-  
-  coloured_print("'Low and high' ", colour = "green")
+  res$qc$lw <- 
+    ovog::hv_tidy_length_weights(res$stillingar) |> 
+    dplyr::select(tegund, lengd, osl1, osl2, sl1, sl2)
+  res$qc$range <- 
+    ovog::hv_tidy_range(res$stillingar)
+
+  coloured_print("Checking measurments ", colour = "green")
+  coloured_print("Checking length vs weights", colour = "green")
   res$kv.this.year <-
     res$KV |>
-    # Get stodvarnumer
+    # NOTE: FIX UPSTREAM IN ovog-package, include in "kvarnir" upfront
+    #       Think we need cruise, tow number and otolith number
     dplyr::left_join(res$ST |>
                        dplyr::select(synis_id, index, leidangur, stod),
                      by = dplyr::join_by(synis_id, index))  |>
     dplyr::left_join(res$qc$lw, 
                      by = dplyr::join_by(tegund, lengd)) |> 
-    dplyr::mutate(ok.l.osl = dplyr::if_else(oslaegt >= osl1 & oslaegt <= osl2, TRUE, FALSE, TRUE),
-                   ok.l.sl = dplyr::if_else(slaegt >= sl1 & slaegt <= sl2, TRUE, FALSE, TRUE)) |> 
-    dplyr::select(-c(osl1:sl2)) |> 
+    dplyr::mutate(ok.l.osl = dplyr::if_else(dplyr::between(oslaegt, osl1, osl2), TRUE, FALSE, TRUE),
+                  ok.l.sl  = dplyr::if_else(dplyr::between(slaegt,   sl1,  sl2), TRUE, FALSE, TRUE),
+                  stod_knr = paste0(stod, "-", nr)) |> 
+    dplyr::select(-c(osl1:sl2))
+  
+  coloured_print("Checking gutted, gonads, liver vs ungutted ratio", colour = "green")
+  coloured_print("                REMINDER: Need to get data on magi", colour = "cyan")
+  res$kv.this.year <- 
+    res$kv.this.year |> 
     dplyr::left_join(res$stillingar$fiskteg_tegundir |> 
-                     dplyr::select(tegund = fisktegund_id, kynkirtlar_high:oslaegt_vigtad_low), 
-                   by = dplyr::join_by(tegund)) |> 
-    dplyr::mutate(ok.sl.osl = dplyr::if_else(slaegt/oslaegt >= oslaegt_vigtad_low & slaegt/oslaegt <= oslaegt_slaegt_high, TRUE, FALSE, TRUE),
-                  ok.kirtlar.osl = dplyr::if_else(kynfaeri/oslaegt >= kynkirtlar_low & kynfaeri/oslaegt <= kynkirtlar_high, TRUE, FALSE, TRUE))
-  # NOTE: Here have a trouble that variable names is not dumped in json if it is NA - should create a dummy file
-                  #ok.lifur.osl = dplyr::if_else(lifur/oslaegt >= lifur_low & lifur/oslaegt <= lifur_high, TRUE, FALSE, TRUE),
-                  #ok.magir.osl = dplyr::if_else(magi/oslaegt  >= magi_low & magi/oslaegt <= magi_high, TRUE, FALSE, TRUE))
-    #dplyr::select(-c(kynkirtlar_high:oslaegt_vigtad_low))
+                       dplyr::select(tegund = fisktegund_id, tidyselect::ends_with("_low"), tidyselect::ends_with("_high")) |> 
+                       # NOT SURE IF THIS IS RIGHT
+                       dplyr::mutate(oslaegt_vigtad_low = oslaegt_vigtad_low / 100,
+                                     oslaegt_slaegt_high = oslaegt_slaegt_high / 100),
+                     by = dplyr::join_by(tegund)) |> 
+    dplyr::mutate(
+      ok.sl.osl      = dplyr::if_else(dplyr::between(slaegt/oslaegt,   oslaegt_slaegt_low, oslaegt_slaegt_high), TRUE, FALSE, TRUE),
+      ok.kirtlar.osl = dplyr::if_else(dplyr::between(kynfaeri/oslaegt,     kynkirtlar_low,     kynkirtlar_high), TRUE, FALSE, TRUE),
+      # ok.magir.osl   = dplyr::if_else(dplyr::between(magi/oslaegt,               magi_low,           magi_high), TRUE, FALSE, TRUE),
+      ok.lifur.osl   = dplyr::if_else(dplyr::between(lifur/oslaegt,             lifur_low,          lifur_high), TRUE, FALSE, TRUE)) |> 
+    dplyr::select(-c(tidyselect::ends_with("_low"), tidyselect::ends_with("_high")))
   
   
   
