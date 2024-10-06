@@ -1,8 +1,8 @@
-#remotes::install_github("einarhjorleifsson/ovog")
-#devtools::load_all()
-#cruises <- c("TB2-2024", "TTH1-2024")
-#maelingar <- c("data-raw/SMH/TB2-2024.zip", "data-raw/SMH/TTH1-2024.zip")
-#stillingar <- c("data-raw/SMH/stillingar_SMH_rall_(haust).zip")
+# remotes::install_github("einarhjorleifsson/ovog")
+# devtools::load_all()
+# maelingar <- c("data-raw/SMH/TB2-2024.zip", "data-raw/SMH/TTH1-2024.zip")
+# stillingar <- c("data-raw/SMH/stillingar_SMH_rall_(haust).zip")
+# tmp <- sm_munge(maelingar, stillingar)
 
 #' Prepares data for the smxapp
 #'
@@ -15,8 +15,9 @@
 #'
 sm_munge <- function(maelingar, stillingar, current.year = lubridate::year(lubridate::today())) {
   
-  ## Current measurements ------------------------------------------------------
-  coloured_print("Reading current measurements", colour = "green")
+  # IMPORT --------------------------------------------------------------------
+  coloured_print("IMPORT", colour = "green")
+  coloured_print("Import current measurements", colour = "green")
   if(!any(file.exists(maelingar))) {
     warning("At least one of the measurments files does not exist")
     tibble::tibble(file = maelingar,
@@ -25,21 +26,36 @@ sm_munge <- function(maelingar, stillingar, current.year = lubridate::year(lubri
     stop("Fix the file path of measurement files")
   }
   res <-
-    ovog::hv_read_cruise(maelingar, collapse_station = TRUE) |> 
-    ovog::hv_create_tables(scale = TRUE) |> 
-    sm_standardize_by_tow(tow = c(2, 4, 8)) |> 
-    sm_calc_coords() |> 
-    sm_add_coords_to_length()
+    ovog::hv_import_cruise(maelingar, collapse_station = TRUE) |> 
+    # NOTE: no longer raised by counted
+    ovog::hv_create_tables()
   
-  current.synaflokkur <- unique(res$ST$synaflokkur)
+  res$stodvar <- 
+    res$stodvar |> 
+    dplyr::rename(kastad_lengd = kastad_v_lengd,
+                  kastad_breidd = kastad_n_breidd,
+                  hift_lengd = hift_v_lengd,
+                  hift_breidd = hift_n_breidd,
+                  veidarfaeri = fishing_gear_no) |> 
+    dplyr::mutate(kastad_lengd = -kastad_lengd,
+                  hift_lengd   = -hift_lengd,
+                  index = dplyr::case_when(!is.na(reitur) & !is.na(tognumer) & !is.na(veidarfaeri) ~ (reitur * 100 + tognumer) * 100 + veidarfaeri,
+                                           .default = -1))
+  if(any(is.na(res$stodvar$reitur))) coloured_print("Reitur is missing, this may create trouble downstream", colour = "red")
+  if(any(is.na(res$stodvar$tognumer))) coloured_print("Tognumer is missing, this may create trouble downstream", colour = "red")
+  if(any(is.na(res$stodvar$veidarfaeri))) coloured_print("Veidarfaeri missing, this may create trouble downstream", colour = "red")
+  
+  current.synaflokkur <- unique(res$stodvar$synaflokkur)
+  coloured_print(paste0("The 'synaflokkur' of the zip files is: ", current.synaflokkur), colour = "green") 
   if(length(current.synaflokkur) > 1) {
     stop(paste("There are more than one synaflokkur in the measurement files (",
                current.synaflokkur,
                ")"))
   }
+  if(is.null(current.synaflokkur)) stop("Synaflokkur is NULL")
   
-  # Stillingar -----------------------------------------------------------------
-  coloured_print("Reading setup ('stillingar')", colour = "green")
+  ## Stillingar -----------------------------------------------------------------
+  coloured_print("Import setup ('stillingar')", colour = "green")
   if(!any(file.exists(stillingar))) {
     warning("At least one of the setup ('stillingar') files does not exist")
     tibble::tibble(file = stillingar,
@@ -47,7 +63,7 @@ sm_munge <- function(maelingar, stillingar, current.year = lubridate::year(lubri
       knitr::kable(caption = "List of files to import and if they exist or not")
     stop("Fix the file path of setup files")
   }
-  res$stillingar <- ovog::hv_read_stillingar(stillingar)
+  res$stillingar <- ovog::hv_import_stillingar(stillingar)
   
   # TEST
   # Is sample class in stillingar the same as in cruise
@@ -55,45 +71,98 @@ sm_munge <- function(maelingar, stillingar, current.year = lubridate::year(lubri
   
   ## Historical measurments ----------------------------------------------------
   # uses data in {mardata}
-  coloured_print("Reading historical measurements (takes a while)", colour = "green")
+  coloured_print("Importing historical measurements (takes a while)", colour = "green")
   last.year <- current.year - 1
   history <- 
-    sm_read_historical(years = c(1985:last.year), sample_class = current.synaflokkur) |> 
-    sm_standardize_by_tow(tow = c(2, 4, 8)) |> 
-    sm_add_coords_to_length()
-  
-  
+    sm_read_historical(years = c(1985:last.year), sample_class = current.synaflokkur)
+  history$stodvar <-
+    history$stodvar |> 
+    dplyr::mutate(index = dplyr::case_when(!is.na(reitur) & !is.na(tognumer) & !is.na(veidarfaeri) ~ (reitur * 100 + tognumer) * 100 + veidarfaeri,
+                                           .default = -1))
   
   ## Combine data ----------------------------------------------------------------
   # Only tows done this year
-  coloured_print("Combining data", colour = "green")
+  coloured_print("Combine current and historical data", colour = "green")
   
-  index.done <- res$ST |> dplyr::filter(ar == current.year) |> dplyr::pull(index)
+  index.done <- res$stodvar |> dplyr::pull(index)
   
-  res$ST <- dplyr::bind_rows(res$ST, history$ST |> dplyr::filter(index %in% index.done))
-  res$LE <- dplyr::bind_rows(res$LE, history$LE |> dplyr::filter(index %in% index.done))
+  # tempoarily add filter
+  history$lengdir <-
+    history$stodvar |> 
+    dplyr::select(.file, synis_id, index) |> 
+    dplyr::left_join(history$lengdir,
+                     by = dplyr::join_by(.file, synis_id))
+  history$numer <-
+    history$stodvar |> 
+    dplyr::select(.file, synis_id, index) |> 
+    dplyr::left_join(history$numer,
+                     by = dplyr::join_by(.file, synis_id))
+  
+  res$stodvar <- dplyr::bind_rows(res$stodvar, history$stodvar |> dplyr::filter(index %in% index.done))
+  res$lengdir <- dplyr::bind_rows(res$lengdir, history$lengdir |> dplyr::filter(index %in% index.done) |> dplyr::select(-index))
+  res$numer   <- dplyr::bind_rows(res$numer,   history$numer   |> dplyr::filter(index %in% index.done) |> dplyr::select(-index))
+  
+  res$stodvar <- 
+    res$stodvar |> 
+    dplyr::mutate(ar = lubridate::year(dags),
+                  lon = dplyr::case_when(is.na(hift_lengd) ~ kastad_lengd,
+                                         !is.na(kastad_lengd) & !is.na(hift_lengd) ~ (kastad_lengd + hift_lengd) / 2,
+                                         .default = kastad_lengd),
+                  lat = dplyr::case_when(is.na(hift_breidd) ~ kastad_breidd,
+                                         !is.na(kastad_breidd) & !is.na(hift_breidd) ~ (kastad_breidd + hift_breidd) / 2,
+                                         .default = kastad_breidd))
   
   ## Some tests ------------------------------------------------------------------
-  if(any(is.na(res$LE$lengd))) {
+  if(any(is.na(res$lengdir$lengd))) {
     message("Unexpected: Some lengths are NA's, these are dropped")
-    res$LE <-
-      res$LE |> 
+    res$lengdir <-
+      res$lengdir |> 
       dplyr::filter(!is.na(lengd))
   }
   
-  ## Munge -----------------------------------------------------------------------
-  ### length by year -------------------------------------------------------------
-  coloured_print("Data munge", colour = "green")
+  # MUNGE ----------------------------------------------------------------------
+  coloured_print("MUNGE", colour = "green")
+  ## Skala með töldum
+  coloured_print("Scale by counted", colour = "green")
+  res$lengdir <- 
+    res$lengdir |> 
+    dplyr::left_join(res$numer |> 
+                       dplyr::select(.file, synis_id, tegund, r),
+                     by = dplyr::join_by(.file, synis_id, tegund)) |> 
+    dplyr::mutate(n = n * r,
+                  b = n * (0.00001 * lengd^3)) |> 
+    dplyr::select(-r)
+  
+  coloured_print("Standardize to towlength", colour = "green")
+  res$lengdir <- 
+    res$lengdir |> 
+    dplyr::left_join(res$stodvar |> 
+                       dplyr::select(.file, synis_id, toglengd),
+                     by = dplyr::join_by(.file, synis_id)) |> 
+    sm_standardize_by_tow() |> 
+    dplyr::select(-toglengd)
+  
+  ## length by year -------------------------------------------------------------
+  coloured_print("Results by year and length", colour = "green")
   
   res$by.length <-
-    res$LE |> 
+    res$stodvar |> 
+    dplyr::select(.file, synis_id, ar) |> 
+    dplyr::left_join(res$lengdir,
+                     by = dplyr::join_by(.file, synis_id)) |> 
     dplyr::group_by(ar, tegund, lengd) |> 
-    dplyr::reframe(n = sum(n),
-                   b = sum(b)) |> 
+    dplyr::reframe(n = sum(n, na.rm = TRUE),
+                   b = sum(b, na.rm = TRUE)) |> 
     tidyr::gather(var, val, c(n, b))
-  ### by stations ----------------------------------------------------------------
+  
+  ### by stations --------------------------------------------------------------
+  coloured_print("Results by station", colour = "green")
+  
   res$by.station <-
-    res$LE |> 
+    res$stodvar |> 
+    dplyr::select(.file, synis_id, ar, index, lon, lat) |> 
+    dplyr::left_join(res$lengdir,
+                     by = dplyr::join_by(.file, synis_id)) |> 
     dplyr::group_by(ar, index, lon, lat, tegund) |> 
     dplyr::reframe(n = sum(n),
                    b = sum(b)) |> 
@@ -108,10 +177,10 @@ sm_munge <- function(maelingar, stillingar, current.year = lubridate::year(lubri
     tidyr::gather(var, val, c(n, b))
   
   # Lögun ----------------------------------------------------------------------
-  coloured_print("\nLast 20 tows", colour = "green")
+  coloured_print("Last 20 tows", colour = "green")
   # Logun last 20
   res$last.20 <-
-    res$ST |>  
+    res$stodvar |>  
     dplyr::filter(ar == current.year) |> 
     dplyr::arrange(leidangur, dplyr::desc(togbyrjun)) |> 
     dplyr::group_by(leidangur) |> 
@@ -119,7 +188,7 @@ sm_munge <- function(maelingar, stillingar, current.year = lubridate::year(lubri
     dplyr::mutate(id = dplyr::n():1) |> 
     dplyr::ungroup() |> 
     dplyr::select(leidangur, id, index) |> 
-    dplyr::left_join(res$ST |> 
+    dplyr::left_join(res$stodvar |> 
                        dplyr::select(index, ar, larett_opnun, lodrett_opnun,
                                      botnhiti, yfirbordshiti, vir_uti),
                      by = dplyr::join_by(index)) |>
@@ -127,26 +196,16 @@ sm_munge <- function(maelingar, stillingar, current.year = lubridate::year(lubri
     dplyr::filter(!is.na(value))
   
   # Timetrend ------------------------------------------------------------------
-  coloured_print("Timetrends ", colour = "green")
+  coloured_print("Tows and temperature - time series", colour = "green")
   # Here first get the index for the current leidangur then join by index
   #  so all past data have current leidangur associated with the current
   #  intex
   res$timetrend <-
-    res$ST |> 
-    dplyr::filter(index %in% index.done,
-                  ar == current.year) |>
-    dplyr::select(leidangur, index) |>
-    dplyr::left_join(res$ST |>
-                       dplyr::select(index, ar, larett_opnun, lodrett_opnun,
-                                     botnhiti, yfirbordshiti, vir_uti),
-                     by = dplyr::join_by(index)) |>
-    tidyr::gather(variable, value, larett_opnun:vir_uti) |>
-    dplyr::filter(!is.na(value))
-  
-  # res$ST |>  
-  #   dplyr::select(index, ar, leidangur, larett_opnun, lodrett_opnun,
-  #                 botnhiti, yfirbordshiti, vir_uti) |>
-  #   tidyr::gather(variable, value, larett_opnun:vir_uti)
+    res$stodvar |>
+    dplyr::select(.file, synis_id, ar, 
+                  larett_opnun, lodrett_opnun,
+                  botnhiti, yfirbordshiti, vir_uti) |> 
+    tidyr::gather(variable, value, larett_opnun:vir_uti)
   
   missing <- 
     res$timetrend |> 
@@ -171,49 +230,52 @@ sm_munge <- function(maelingar, stillingar, current.year = lubridate::year(lubri
     ovog::hv_tidy_length_weights(res$stillingar) |> 
     dplyr::select(tegund, lengd, osl1, osl2, sl1, sl2)
   res$qc$range <- 
-    ovog::hv_tidy_range(res$stillingar)
-
+    ovog::hv_tidy_range(res$stillingar, long = FALSE)
+  
+  # NOTE: FIX UPSTREAM IN ovog-package, include in "kvarnir" upfront
+  #       Think we need cruise, tow number and otolith number
+  res$kv.this.year <-
+    res$kvarnir |>
+    dplyr::left_join(res$stodvar |>
+                       dplyr::select(.file, synis_id, index, leidangur, stod),
+                     by = dplyr::join_by(.file, synis_id))
+  
   coloured_print("Checking measurments ", colour = "green")
   coloured_print("Checking length vs weights", colour = "green")
   res$kv.this.year <-
-    res$KV |>
-    # NOTE: FIX UPSTREAM IN ovog-package, include in "kvarnir" upfront
-    #       Think we need cruise, tow number and otolith number
-    dplyr::left_join(res$ST |>
-                       dplyr::select(synis_id, index, leidangur, stod),
-                     by = dplyr::join_by(synis_id, index))  |>
+    res$kv.this.year |> 
     dplyr::left_join(res$qc$lw, 
                      by = dplyr::join_by(tegund, lengd)) |> 
-    dplyr::mutate(ok.l.osl = dplyr::if_else(dplyr::between(oslaegt, osl1, osl2), TRUE, FALSE, TRUE),
-                  ok.l.sl  = dplyr::if_else(dplyr::between(slaegt,   sl1,  sl2), TRUE, FALSE, TRUE),
-                  stod_knr = paste0(stod, "-", nr)) |> 
-    dplyr::select(-c(osl1:sl2))
+    dplyr::arrange(tegund, lengd) |> 
+    dplyr::mutate(.l_osl = dplyr::if_else(dplyr::between(oslaegt, osl1, osl2), "ok", "check", "na"),
+                  .l_sl  = dplyr::if_else(dplyr::between(slaegt,   sl1,  sl2), "ok", "check", "na")) |> 
+    dplyr::select(-c(osl1, osl2, sl1, sl2))
   
   coloured_print("Checking gutted, gonads, liver vs ungutted ratio", colour = "green")
   coloured_print("                REMINDER: Need to get data on magi", colour = "cyan")
   res$kv.this.year <- 
     res$kv.this.year |> 
-    dplyr::left_join(res$stillingar$fiskteg_tegundir |> 
-                       dplyr::select(tegund = fisktegund_id, tidyselect::ends_with("_low"), tidyselect::ends_with("_high")) |> 
-                       # NOT SURE IF THIS IS RIGHT
-                       dplyr::mutate(oslaegt_vigtad_low = oslaegt_vigtad_low / 100,
-                                     oslaegt_slaegt_high = oslaegt_slaegt_high / 100),
+    dplyr::left_join(res$qc$range |> 
+                       dplyr::select(tegund, 
+                                     g1 = kynkirtlar_low, g2 = kynkirtlar_high,
+                                     l1 = lifur_low,      l2 = lifur_high,
+                                     s1 = slaegt_low,     s2 = slaegt_high,
+                                     m1 = magi_low,       m2 = magi_high),
                      by = dplyr::join_by(tegund)) |> 
     dplyr::mutate(
-      ok.sl.osl      = dplyr::if_else(dplyr::between(slaegt/oslaegt,   oslaegt_slaegt_low, oslaegt_slaegt_high), TRUE, FALSE, TRUE),
-      ok.kirtlar.osl = dplyr::if_else(dplyr::between(kynfaeri/oslaegt,     kynkirtlar_low,     kynkirtlar_high), TRUE, FALSE, TRUE),
-      # ok.magir.osl   = dplyr::if_else(dplyr::between(magi/oslaegt,               magi_low,           magi_high), TRUE, FALSE, TRUE),
-      ok.lifur.osl   = dplyr::if_else(dplyr::between(lifur/oslaegt,             lifur_low,          lifur_high), TRUE, FALSE, TRUE)) |> 
-    dplyr::select(-c(tidyselect::ends_with("_low"), tidyselect::ends_with("_high")))
+      .sl_osl      = dplyr::if_else(dplyr::between(slaegt/oslaegt,   s1, s2), "ok", "check", "na"),
+      .kyn = dplyr::if_else(dplyr::between(kynfaeri/oslaegt, g1, g2), "ok", "check", "na"),
+      # .mag   = dplyr::if_else(dplyr::between(magi/oslaegt,,    m1, m2), "ok", "check", "na"),
+      .lif   = dplyr::if_else(dplyr::between(lifur/oslaegt,    l1, l2), "ok", "check", "na")
+    ) |> 
+    dplyr::select(-c(g1, g2, l1, l2, s1, s2, m1, m2))
   
   
   
   # The boot -------------------------------------------------------------------
-  if(TRUE) {
-    res <- 
+  res$boot <- 
       res |> 
       sm_boot()
-  }
   
   coloured_print("\nHURRA!", "green")
   return(res)
