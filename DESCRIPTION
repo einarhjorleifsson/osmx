@@ -19,8 +19,7 @@ Imports:
     lubridate,
     ovog,
     tibble,
-    tidyr,
-    tidyselect
+    tidyr
 Suggests:
     mardata,
     rmarkdown

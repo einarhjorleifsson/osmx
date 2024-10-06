@@ -32,6 +32,7 @@ utils::globalVariables(
     "Name",
     
     "lower.ci", "upper.ci", "val", "id", "osl", "sl",
+    "g1", "g2", "l1", "l2", "m1", "m2", "s1", "s2", "slaegt_high", "slaegt_low", "stod_id",
     
     "."))
 

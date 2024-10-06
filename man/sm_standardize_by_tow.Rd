@@ -4,10 +4,10 @@
 \alias{sm_standardize_by_tow}
 \title{Standardize by towlength}
 \usage{
-sm_standardize_by_tow(res, tow = c(2, 4, 8))
+sm_standardize_by_tow(lengdir, tow = c(2, 4, 8))
 }
 \arguments{
-\item{res}{The hafvog list}
+\item{lengdir}{The hafvog list}
 
 \item{tow}{A character vector specifying min, standard and max towlength}
 }
