@@ -142,7 +142,8 @@ sm_munge <- function(maelingar, stillingar, current.year = lubridate::year(lubri
   
   # MUNGE ----------------------------------------------------------------------
   coloured_print("MUNGE", colour = "green")
-  ## Skala með töldum
+  
+  ## Scale with counted --------------------------------------------------------
   coloured_print("Scale by counted", colour = "green")
   res$lengdir <- 
     res$lengdir |> 
@@ -153,6 +154,7 @@ sm_munge <- function(maelingar, stillingar, current.year = lubridate::year(lubri
                   b = n * (0.00001 * lengd^3)) |> 
     dplyr::select(-r)
   
+  ## Scale to standardized tow length ------------------------------------------
   coloured_print("Standardize to towlength", colour = "green")
   res$lengdir <- 
     res$lengdir |> 
@@ -162,7 +164,7 @@ sm_munge <- function(maelingar, stillingar, current.year = lubridate::year(lubri
     sm_standardize_by_tow() |> 
     dplyr::select(-toglengd)
   
-  ## length by year -------------------------------------------------------------
+  ## Summarise: length by year -------------------------------------------------
   coloured_print("Results by year and length", colour = "green")
   
   res$by.length <-
@@ -175,7 +177,7 @@ sm_munge <- function(maelingar, stillingar, current.year = lubridate::year(lubri
                    b = sum(b, na.rm = TRUE)) |> 
     tidyr::gather(var, val, c(n, b))
   
-  ### by stations --------------------------------------------------------------
+  ## Summarise: by stations ----------------------------------------------------
   coloured_print("Results by station", colour = "green")
   
   res$by.station <-
@@ -196,9 +198,16 @@ sm_munge <- function(maelingar, stillingar, current.year = lubridate::year(lubri
                     fill = list(n = 0, b = 0)) |> 
     tidyr::gather(var, val, c(n, b))
   
-  # Lögun ----------------------------------------------------------------------
+  ## The boot ------------------------------------------------------------------
+  res <- 
+    res |> 
+    sm_boot()
+  
+  ## Trawl metrics and temperature ---------------------------------------------
+  coloured_print("\nTrawl metrics and temperature", colour = "green")
+  ### Last 20 tows -------------------------------------------------------------
   coloured_print("Last 20 tows", colour = "green")
-  # Logun last 20
+  
   res$last.20 <-
     res$stodvar |>  
     dplyr::filter(ar == current.year) |> 
@@ -215,8 +224,8 @@ sm_munge <- function(maelingar, stillingar, current.year = lubridate::year(lubri
     tidyr::gather(variable, value, larett_opnun:vir_uti) |> 
     dplyr::filter(!is.na(value))
   
-  # Timetrend ------------------------------------------------------------------
-  coloured_print("Tows and temperature - time series", colour = "green")
+  ### Timetrend ------------------------------------------------------------------
+  coloured_print("Time series", colour = "green")
   # Here first get the index for the current leidangur then join by index
   #  so all past data have current leidangur associated with the current
   #  intex
@@ -243,26 +252,31 @@ sm_munge <- function(maelingar, stillingar, current.year = lubridate::year(lubri
     res$timetrend |> 
     dplyr::filter(!is.na(value))
   
-  # tidy stillingar ------------------------------------------------------------
+  
+  
+  # QUALITY CONTROL ------------------------------------------------------------
+  ## tidy stillingar -----------------------------------------------------------
   coloured_print("Tidy 'Stillingar' ", colour = "green")
-  ## LW ------------------------------------------------------------------------
+  ### Length weight ------------------------------------------------------------
   coloured_print("'Length-weight' ", colour = "green")
   res$qc <- list()
   res$qc$lw <- 
     ovog::hv_tidy_length_weights(res$stillingar) |> 
     dplyr::select(tegund, lengd, osl1, osl2, sl1, sl2)
+  ### Ratio relative to ungutted weight ----------------------------------------
   res$qc$range <- 
     ovog::hv_tidy_range(res$stillingar, long = FALSE)
   
-  # NOTE: FIX UPSTREAM IN ovog-package, include in "kvarnir" upfront
-  #       Think we need cruise, tow number and otolith number
+  ## QC: Check length ranges ---------------------------------------------------
+  
+  ## QC: Check measurements ----------------------------------------------------
+  coloured_print("Checking measurments ", colour = "green")
   res$kv.this.year <-
     res$kvarnir |>
     dplyr::left_join(res$stodvar |>
-                       dplyr::select(leidangur, synis_id, index, leidangur, stod),
+                       dplyr::select(leidangur, stod, index, synis_id),
                      by = dplyr::join_by(leidangur, synis_id))
-  
-  coloured_print("Checking measurments ", colour = "green")
+  ### Checking length vs weights -----------------------------------------------
   coloured_print("Checking length vs weights", colour = "green")
   res$kv.this.year <-
     res$kv.this.year |> 
@@ -272,7 +286,7 @@ sm_munge <- function(maelingar, stillingar, current.year = lubridate::year(lubri
     dplyr::mutate(.l_osl = dplyr::if_else(dplyr::between(oslaegt, osl1, osl2), "ok", "check", "na"),
                   .l_sl  = dplyr::if_else(dplyr::between(slaegt,   sl1,  sl2), "ok", "check", "na")) |> 
     dplyr::select(-c(osl1, osl2, sl1, sl2))
-  
+  ### Checking gutted, gonads and liver vs ungutted ratio ----------------------
   coloured_print("Checking gutted, gonads, liver vs ungutted ratio", colour = "green")
   coloured_print("                REMINDER: Need to get data on magi", colour = "cyan")
   res$kv.this.year <- 
@@ -292,12 +306,21 @@ sm_munge <- function(maelingar, stillingar, current.year = lubridate::year(lubri
     ) |> 
     dplyr::select(-c(g1, g2, l1, l2, s1, s2, m1, m2))
   
+  ### Formatting QC table ------------------------------------------------------
+  coloured_print("Formatting QC table", colour = "green")
+  res$kv.this.year <- 
+    res$kv.this.year |> 
+    dplyr::mutate(lestnr = 
+                    paste0(stringr::str_sub(leidangur, 1, 3) |> stringr::str_remove("-"),
+                           "-",
+                           stod,
+                           "-",
+                           nr)) |> 
+    dplyr::select(lestnr, tegund, lengd, oslaegt, slaegt, lifur, kynfaeri,
+                  .l_osl, .l_sl, .sl_osl, .kyn, .lif,
+                  dplyr::everything()) |> 
+    dplyr::arrange(leidangur, stod, tegund, nr)
   
-  
-  # The boot -------------------------------------------------------------------
-  res <- 
-    res |> 
-    sm_boot()
   
   coloured_print("\nHURRA!", "green")
   return(res)
