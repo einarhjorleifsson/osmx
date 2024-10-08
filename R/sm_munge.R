@@ -17,6 +17,7 @@ sm_munge <- function(maelingar, stillingar, current.year = lubridate::year(lubri
   
   # IMPORT --------------------------------------------------------------------
   coloured_print("IMPORT", colour = "green")
+  ## Current measurments -------------------------------------------------------
   coloured_print("Import current measurements", colour = "green")
   if(!any(file.exists(maelingar))) {
     warning("At least one of the measurments files does not exist")
@@ -41,10 +42,31 @@ sm_munge <- function(maelingar, stillingar, current.year = lubridate::year(lubri
                   hift_lengd   = -hift_lengd,
                   index = dplyr::case_when(!is.na(reitur) & !is.na(tognumer) & !is.na(veidarfaeri) ~ (reitur * 100 + tognumer) * 100 + veidarfaeri,
                                            .default = -1))
-  if(any(is.na(res$stodvar$reitur))) coloured_print("Reitur is missing, this may create trouble downstream", colour = "red")
-  if(any(is.na(res$stodvar$tognumer))) coloured_print("Tognumer is missing, this may create trouble downstream", colour = "red")
-  if(any(is.na(res$stodvar$veidarfaeri))) coloured_print("Veidarfaeri missing, this may create trouble downstream", colour = "red")
-  
+  ### Some tests ---------------------------------------------------------------
+  if(any(is.na(res$stodvar$reitur))) {
+    coloured_print("Reitur is missing, this may create trouble downstream", colour = "red")
+    res$stodvar |> 
+      dplyr::filter(is.na(reitur)) |> 
+      dplyr::select(leidangur, stod, reitur) |> 
+      knitr::kable(caption = "Stations with missing squares") |> 
+      print()
+  }
+  if(any(is.na(res$stodvar$tognumer))) {
+    coloured_print("Tognumer is missing, this may create trouble downstream", colour = "red")
+    res$stodvar |> 
+      dplyr::filter(is.na(tognumer)) |> 
+      dplyr::select(leidangur, stod, tognumer) |> 
+      knitr::kable(caption = "Stations with missing tow number") |> 
+      print()
+  }
+  if(any(is.na(res$stodvar$veidarfaeri))) {
+    coloured_print("Veidarfaeri missing, this may create trouble downstream", colour = "red")
+    res$stodvar |> 
+      dplyr::filter(is.na(veidarfaeri)) |> 
+      dplyr::select(leidangur, stod, veidarfaeri) |> 
+      knitr::kable(caption = "Stations with missing gear") |> 
+      print()
+  }
   current.synaflokkur <- unique(res$stodvar$synaflokkur)
   coloured_print(paste0("The 'synaflokkur' of the zip files is: ", current.synaflokkur), colour = "green") 
   if(length(current.synaflokkur) > 1) {
@@ -65,10 +87,6 @@ sm_munge <- function(maelingar, stillingar, current.year = lubridate::year(lubri
   }
   res$stillingar <- ovog::hv_import_stillingar(stillingar)
   
-  # TEST
-  # Is sample class in stillingar the same as in cruise
-  
-  
   ## Historical measurments ----------------------------------------------------
   # uses data in {mardata}
   coloured_print("Importing historical measurements (takes a while)", colour = "green")
@@ -86,17 +104,17 @@ sm_munge <- function(maelingar, stillingar, current.year = lubridate::year(lubri
   
   index.done <- res$stodvar |> dplyr::pull(index)
   
-  # tempoarily add filter
+  # temporarily add index to use as filter in next step
   history$lengdir <-
     history$stodvar |> 
-    dplyr::select(.file, synis_id, index) |> 
-    dplyr::left_join(history$lengdir,
-                     by = dplyr::join_by(.file, synis_id))
+    dplyr::select(leidangur, synis_id, index) |> 
+    dplyr::inner_join(history$lengdir,
+                     by = dplyr::join_by(leidangur, synis_id))
   history$numer <-
     history$stodvar |> 
-    dplyr::select(.file, synis_id, index) |> 
-    dplyr::left_join(history$numer,
-                     by = dplyr::join_by(.file, synis_id))
+    dplyr::select(leidangur, synis_id, index) |> 
+    dplyr::inner_join(history$numer,
+                     by = dplyr::join_by(leidangur, synis_id))
   
   res$stodvar <- dplyr::bind_rows(res$stodvar, history$stodvar |> dplyr::filter(index %in% index.done))
   res$lengdir <- dplyr::bind_rows(res$lengdir, history$lengdir |> dplyr::filter(index %in% index.done) |> dplyr::select(-index))
@@ -111,14 +129,16 @@ sm_munge <- function(maelingar, stillingar, current.year = lubridate::year(lubri
                   lat = dplyr::case_when(is.na(hift_breidd) ~ kastad_breidd,
                                          !is.na(kastad_breidd) & !is.na(hift_breidd) ~ (kastad_breidd + hift_breidd) / 2,
                                          .default = kastad_breidd))
-  
-  ## Some tests ------------------------------------------------------------------
-  if(any(is.na(res$lengdir$lengd))) {
-    message("Unexpected: Some lengths are NA's, these are dropped")
-    res$lengdir <-
-      res$lengdir |> 
-      dplyr::filter(!is.na(lengd))
-  }
+  # NOTE: THIS SHOULD NOT BE NEEDED, CHECK WHY WE GET MISSING VALUES
+  res$lengdir <-
+    res$lengdir |> 
+    dplyr::filter(!is.na(tegund))
+  res$numer <-
+    res$numer |> 
+    dplyr::filter(!is.na(tegund))
+  res$kvarnir <-
+    res$kvarnir |> 
+    dplyr::filter(!is.na(tegund))
   
   # MUNGE ----------------------------------------------------------------------
   coloured_print("MUNGE", colour = "green")
@@ -127,8 +147,8 @@ sm_munge <- function(maelingar, stillingar, current.year = lubridate::year(lubri
   res$lengdir <- 
     res$lengdir |> 
     dplyr::left_join(res$numer |> 
-                       dplyr::select(.file, synis_id, tegund, r),
-                     by = dplyr::join_by(.file, synis_id, tegund)) |> 
+                       dplyr::select(leidangur, synis_id, tegund, r),
+                     by = dplyr::join_by(leidangur, synis_id, tegund)) |> 
     dplyr::mutate(n = n * r,
                   b = n * (0.00001 * lengd^3)) |> 
     dplyr::select(-r)
@@ -137,8 +157,8 @@ sm_munge <- function(maelingar, stillingar, current.year = lubridate::year(lubri
   res$lengdir <- 
     res$lengdir |> 
     dplyr::left_join(res$stodvar |> 
-                       dplyr::select(.file, synis_id, toglengd),
-                     by = dplyr::join_by(.file, synis_id)) |> 
+                       dplyr::select(leidangur, synis_id, toglengd),
+                     by = dplyr::join_by(leidangur, synis_id)) |> 
     sm_standardize_by_tow() |> 
     dplyr::select(-toglengd)
   
@@ -147,9 +167,9 @@ sm_munge <- function(maelingar, stillingar, current.year = lubridate::year(lubri
   
   res$by.length <-
     res$stodvar |> 
-    dplyr::select(.file, synis_id, ar) |> 
+    dplyr::select(leidangur, synis_id, ar) |> 
     dplyr::left_join(res$lengdir,
-                     by = dplyr::join_by(.file, synis_id)) |> 
+                     by = dplyr::join_by(leidangur, synis_id)) |> 
     dplyr::group_by(ar, tegund, lengd) |> 
     dplyr::reframe(n = sum(n, na.rm = TRUE),
                    b = sum(b, na.rm = TRUE)) |> 
@@ -160,9 +180,9 @@ sm_munge <- function(maelingar, stillingar, current.year = lubridate::year(lubri
   
   res$by.station <-
     res$stodvar |> 
-    dplyr::select(.file, synis_id, ar, index, lon, lat) |> 
+    dplyr::select(leidangur, synis_id, ar, index, lon, lat) |> 
     dplyr::left_join(res$lengdir,
-                     by = dplyr::join_by(.file, synis_id)) |> 
+                     by = dplyr::join_by(leidangur, synis_id)) |> 
     dplyr::group_by(ar, index, lon, lat, tegund) |> 
     dplyr::reframe(n = sum(n),
                    b = sum(b)) |> 
@@ -202,7 +222,7 @@ sm_munge <- function(maelingar, stillingar, current.year = lubridate::year(lubri
   #  intex
   res$timetrend <-
     res$stodvar |>
-    dplyr::select(.file, synis_id, ar, 
+    dplyr::select(leidangur, synis_id, ar, 
                   larett_opnun, lodrett_opnun,
                   botnhiti, yfirbordshiti, vir_uti) |> 
     tidyr::gather(variable, value, larett_opnun:vir_uti)
@@ -214,7 +234,9 @@ sm_munge <- function(maelingar, stillingar, current.year = lubridate::year(lubri
   if(nrow(missing) > 1) {
     coloured_print(paste0("Unexpected - missing values\n"), colour = "red")
     coloured_print("Missing values will be dropped\n", colour = "red")
-    missing |> knitr::kable(caption = "List of variables with missing values:")
+    missing |> 
+      knitr::kable(caption = "List of variables with missing values:") |> 
+      print()
   }
   
   res$timetrend <- 
@@ -237,8 +259,8 @@ sm_munge <- function(maelingar, stillingar, current.year = lubridate::year(lubri
   res$kv.this.year <-
     res$kvarnir |>
     dplyr::left_join(res$stodvar |>
-                       dplyr::select(.file, synis_id, index, leidangur, stod),
-                     by = dplyr::join_by(.file, synis_id))
+                       dplyr::select(leidangur, synis_id, index, leidangur, stod),
+                     by = dplyr::join_by(leidangur, synis_id))
   
   coloured_print("Checking measurments ", colour = "green")
   coloured_print("Checking length vs weights", colour = "green")
@@ -273,9 +295,9 @@ sm_munge <- function(maelingar, stillingar, current.year = lubridate::year(lubri
   
   
   # The boot -------------------------------------------------------------------
-  res$boot <- 
-      res |> 
-      sm_boot()
+  res <- 
+    res |> 
+    sm_boot()
   
   coloured_print("\nHURRA!", "green")
   return(res)

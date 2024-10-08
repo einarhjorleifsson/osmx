@@ -17,11 +17,9 @@ sm_read_historical <- function(years, sample_class) {
     dplyr::left_join(mardata::syni,
                      by = dplyr::join_by(stod_id)) |>
     dplyr::filter(synaflokkur_nr %in% sample_class) |>
-    dplyr::mutate(.file = "history") |> 
     #dplyr::mutate(index = dplyr::case_when(!is.na(reitur) & !is.na(tog_nr) & !is.na(veidarfaeri) ~ (reitur * 100 + tog_nr) * 100 + veidarfaeri),
     #              .default = -1) |> 
-    dplyr::select(.file,
-                  synis_id,
+    dplyr::select(synis_id,
                   leidangur,
                   dags,
                   skip = skip_nr,
@@ -78,12 +76,12 @@ sm_read_historical <- function(years, sample_class) {
   
   numer <-
     stodvar |> 
-    dplyr::select(.file, synis_id) |> 
+    dplyr::select(leidangur, synis_id) |> 
     dplyr::left_join(mardata::skala |>
                        # strange to have na in tegund_nr
                        dplyr::filter(!is.na(tegund_nr)),
                      by = dplyr::join_by(synis_id)) |>
-    dplyr::select(.file, 
+    dplyr::select(leidangur, 
                   synis_id,
                   tegund = tegund_nr,
                   fj_maelt = maeldir,
@@ -93,10 +91,10 @@ sm_read_historical <- function(years, sample_class) {
                                        .default = fj_alls / fj_maelt))
   lengdir <-
     stodvar |> 
-    dplyr::select(.file, synis_id) |> 
+    dplyr::select(leidangur, synis_id) |> 
     dplyr::left_join(mardata::lengd,
                      by = dplyr::join_by(synis_id)) |> 
-    dplyr::group_by(.file, synis_id, tegund = tegund_nr, lengd) |> 
+    dplyr::group_by(leidangur, synis_id, tegund = tegund_nr, lengd) |> 
     dplyr::reframe(n = sum(fjoldi, na.rm = TRUE))
   
   # NOTE: This happens e.g. if one gets a zero station
@@ -105,10 +103,10 @@ sm_read_historical <- function(years, sample_class) {
   
   kvarnir <-
     stodvar |> 
-    dplyr::select(.file, synis_id) |> 
+    dplyr::select(leidangur, synis_id) |> 
     dplyr::inner_join(mardata::aldur,
                       by = dplyr::join_by(synis_id)) |> 
-    dplyr::select(.file, 
+    dplyr::select(leidangur, 
                   synis_id,
                   tegund = tegund_nr,
                   nr = kvarna_nr,
