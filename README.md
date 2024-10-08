@@ -3,26 +3,56 @@
 
 # osmx
 
-<!-- badges: start -->
-<!-- badges: end -->
+The primary purpose of the {osxm}-package is to render the now infamous
+“Mælaaborð Íslenzkra Ralla” shinyapp.
 
-The goal of osmx is to …
+The `smxapp` relies on 2 other packages:
+
+- {mardata}: Package that contains historical data
+- {[ovog](https://heima.hafro.is/~einarhj/pkg/ovog)}: A package that
+  reads and transforms zip-files dumped from hafvog.
+
+The {osmx}-packages does the following:
+
+- Merges the historical and currently collected data
+- Creates various summary and quality control tables (TODO: Explain each
+  table)
+- Provides plots- and table-functions that are used in the shinyapp
+- Provides a shiny-app template for easy exploration of the data
 
 ## Installation
 
-You can install the development version of osmx from
-[GitHub](https://github.com/) with:
+You can install {ovog} and {osmx} from [GitHub](https://github.com/)
+with:
 
 ``` r
 # install.packages("devtools")
-devtools::install_github("einarhjorleifsson/osmx")
+remotes::install_github("einarhjorleifsson/ovog")
+remotes::install_github("einarhjorleifsson/osmx")
 ```
 
-## Example
+The mardata is a MFRI data-package that is not publicly available. If
+you are within the Institute’s firewall you can install via:
 
-This is a basic example which shows you how to solve a common problem:
+    remotes::install_local("R:/R/Pakkar/mardata", force = TRUE)
 
-``` r
-library(osmx)
-## basic example code
-```
+## Why two packages?
+
+The reason for the process relying on two packages is that each package
+is limited to doing fewer things betters. User may only be interested in
+accessing the contemporaneous measurments in hafvog, e.g. in cruises
+other than groundfish surveys. Having two package will hopefully reduce
+maintenance overhead.
+
+## What will happen to the xe-package?
+
+In previous workflow the data contemporaneously collected were accessed
+directly from an Oracle database (XE). That dependency generated at
+least some consternation with regards to:
+
+- Connection nuances
+- Having to rely on an old {dbplyr}-version
+- Read access and password problems
+
+The xe-package will still be around as is, but will no longer be
+maintained.

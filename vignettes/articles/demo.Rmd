@@ -9,548 +9,170 @@ knitr::opts_chunk$set(
 )
 ```
 
-```{r setup}
+## Loading
+
+```{r}
+#| message: false
+#| warning: false
 library(tidyverse)
 library(mardata)
 library(ovog)
 library(osmx)
 ```
 
-## Example
+## Reading data from dumped zip-files
+
+One can read in the data currently being collected using the `hv_import_cruise` that resides in the {ovog}-package:
 
 ```{r}
-# Current data/cruises ---------------------------------------------------------
-fil <- c("data-raw/A3-2024.zip", "data-raw/B3-2024.zip", "data-raw/TB1-2024.zip")
-fil <- paste0("~/R/Pakkar2/hafvog/", fil)
+cruises <- c("~/R/Pakkar2/osmx/data-raw/SMH/TB2-2024.zip", "~/R/Pakkar2/osmx/data-raw/SMH/TTH1-2024.zip")
+measurement <- 
+  ovog::hv_import_cruise(cruises) |> 
+  ovog::hv_create_tables()
+```
 
-# Data -------------------------------------------------------------------------
-## Current measurements --------------------------------------------------------
-res <-
-  ovog:::hv_read_zips(fil, collapse_station = TRUE) |> 
-  ovog::hv_create_tables(scale = TRUE) |> 
-  sm_standardize_by_tow(tow = c(2, 4, 8))
-## Historical measurments ------------------------------------------------------
-# uses data in {mardata}
-history <- 
-  # NOTE: Function does not really belong to ovog-package
-  sm_read_historical(years = c(1985:2023), sample_class = 30) |> 
-  sm_standardize_by_tow(tow = c(2, 4, 8))
+The object returned is a list containing the following tables:
 
-## Combine data ----------------------------------------------------------------
-# Only tows done this year
-index.done <- res$ST |> filter(ar == year(today())) |> pull(index)
+```{r}
+names(measurement)
+```
 
+### Explorations - A sidestep
 
-res$ST <- bind_rows(res$ST, history$ST |> filter(index %in% index.done))
-res$LE <- bind_rows(res$LE, history$LE |> filter(index %in% index.done))
+There should be nothing stopping you from doing analysis of the this data, e.g. one can easily get an overview of the reported station location via:
 
-d <-
-  res$LE |> 
-  group_by(ar, tegund, lengd) |> 
-  reframe(n = sum(n),
-          b = sum(b))
-d |> 
-  filter(tegund == 2,
-         ar >= 2010) |> 
-  rename(y = n) |> 
+```{r}
+measurement$stodvar |> 
+  ggplot() +
+  theme_bw() +
+  geom_segment(aes(x = -kastad_v_lengd, y = kastad_n_breidd,
+                   xend = -hift_v_lengd, yend = hift_n_breidd,
+                   colour = factor(fishing_gear_no)),
+               linewidth = 1) +
+  coord_quickmap()
+```
+
+Or just the length distributions of some selected species via:
+
+```{r}
+measurement$lengdir |> 
+  filter(tegund %in% 1:3) |> 
+  group_by(tegund, lengd) |> 
+  reframe(n = sum(n)) |> 
+  ggplot(aes(lengd, n)) +
+  geom_col() +
+  facet_wrap(~ tegund, scales = "free_y")
+```
+
+## Merging and data transformation
+
+Normally we would ...
+
+```{r}
+stillingar <- c("~/R/Pakkar2/osmx/data-raw/SMH/stillingar_SMH_rall_(haust).zip")
+res <- sm_munge(cruises, stillingar)
+```
+
+## Exploration outside the smx-app
+
+### Sum of catch by lengths
+
+```{r}
+res$by.length |> 
+  dplyr::filter(tegund == 2,
+                ar >= 2010) |> 
+  dplyr::filter(var == "n") |> 
   sm_length_plot()
-
 ```
 
-
-```{r eval = FALSE, echo = FALSE}
-# omar
-# orit
-# ovog
-# osmx
-# omar
-
-library(tidyverse)
-library(mardata)
-# remotes::install_github("einarhjorleifsson/ovog", force = TRUE)
-library(ovog)  # convert to ovog
-library(devtools)
-load_all()   # 
-
-# Current data/cruises ---------------------------------------------------------
-fil <- c("data-raw/A3-2024.zip", "data-raw/B3-2024.zip", "data-raw/TB1-2024.zip")
-fil <- paste0("~/R/Pakkar2/hafvog/", fil)
-
-# Constants --------------------------------------------------------------------
-CRUISES <- basename(fil) |> str_remove(".zip")
-now.year <-
-  dplyr::tibble(x = CRUISES[[1]]) |>
-  tidyr::separate(x, c("ship", "year"), sep = "-", convert = TRUE) |>
-  dplyr::pull(year)
-
-# Data -----------------------------------------------------------------haf--------
-## Current measurements --------------------------------------------------------
-res <-
-  ovog:::hv_read_zips(fil, collapse_station = TRUE) |> 
-  ovog::hv_create_tables(scale = TRUE) |> 
-  sm_standardize_by_tow(tow = c(2, 4, 8))
-
-
-# NOTE 
-map(res, colnames)
-
-if(res$ST |> filter(is.na(index)) |> count() |> pull(n) > 0) warning("Index missing")
-
-## Historical measurements -----------------------------------------------------
-history <- 
-  # NOTE: Function does not really belong to ovog-package
-  hv_read_historical(years = c(1985:2023), sample_class = 30)
-
-## Combine data ----------------------------------------------------------------
-# Only tows done this year
-index.done <- res$ST |> filter(ar == now.year) |> pull(index)
-
-
-res$ST <- bind_rows(res$ST, history$ST |> filter(index %in% index.done))
-res$LE <- bind_rows(res$LE, history$LE |> filter(index %in% index.done))
-
-
-# Add staðlar ------------------------------------------------------------------
-
-
-
-
-
-# Munging for smxapp -----------------------------------------------------------
-print("Various calculations")
-
-
-# TODO
-# if smh (synaflokkur 35) then drop year 2011
-
-tmp <- res$ST |> dplyr::pull(synaflokkur) |> unique()
-if(tmp == 35) {
-  print("Dropping year 1995 and 2011")
-  res$ST <- res$ST |> dplyr::filter(!ar %in% c(1995, 2011))
-  res$LE <- res$LE |> dplyr::filter(!ar %in% c(1995, 2011))
-  res$NU <- res$NU |>  dplyr::filter(!ar %in% c(1995, 2011))
-  res$KV <- res$KV  |>  dplyr::filter(!ar %in% c(1995, 2011))
-}
-
-
-# TODO
-if(FALSE) { # NOT NEEDED??
-  i <- stringr::str_locate(st$leidangur, "-")[,1]
-  st <-
-    st |>
-    dplyr::mutate(leidstod = paste0(stringr::str_sub(leidangur, 1, i), stod))
-}
-
-if(FALSE) {
-  le.this.year <-
-    res$LE |> 
-    dplyr::filter(ar == now.year,
-                  index %in% index.done)
-}
-
-
-# Work on length distributions -------------------------------------------------
-#  Want: All species should have a value for each "ar-index" combination
-tmp <- 
-  res$LE |> 
-  group_by(ar, index, tegund) |> 
-  reframe(n = sum(n),
-          b = sum(b)) |> 
-  # Cross all possible `species` values with the unique pairs of
-  # `(ar, index)` that already exist in the data
-  complete(tegund, nesting(ar, index),
-           fill = list(n = 0, b = 0))
-# testing: the number of species should be the same for all stations and years
-tmp |> 
-  group_by(ar) |> 
-  reframe(n.sid = n_distinct(tegund)) |> 
-  count(n.sid)
-
-
-# This is a bit excessive here because we are doing this for each length class
-le <-
-  res$LE |>
-  # For each year and index want all species
-  #  Question: What do to about synis_id??
-  tidyr::complete(synis_id, tegund) |>
-  tidyr::replace_na(list(lengd = 0, n = 0, b = 0)) |> 
-  dplyr::left_join(st |>
-                     dplyr::select(synis_id, ar, index, toglengd), 
-                   by = join_by(synis_id, ar, index)) |>
-  dplyr::mutate(toglengd = dplyr::if_else(toglengd > max.towlength, max.towlength, toglengd),
-                toglengd = dplyr::if_else(toglengd < min.towlength, min.towlength, toglengd),
-                n.std = n * std.towlength/toglengd,
-                b.std  = ifelse(is.na(n.std), 0, n) * 0.00001 * lengd^3) |>
-  dplyr::select(synis_id, ar, index, lengd, fjoldi, r, n, n.std, b.std)
-print("Length compilation done")
-
-
-# I am here
-
-
-# B. STADLAR -------------------------------------------------------------------
-if(FALSE) {
-  tmp <- read_rds("~/ShinyApps/fyrirkongenekkiprest/data2/res.rds")
-  other.stuff <- tmp$other.stuff
-  stadlar.rallstodvar <- other.stuff$stadlar.rallstodvar
-  stadlar.tegundir <-    other.stuff$stadlar.tegundir
-  stadlar.lw <- other.stuff$stadlar.lw
-  fisktegundir <- other.stuff$fisktegundir
-}
-# stadlar.rallstodvar - NEEDS FIXING
-tmp <- read_rds("~/ShinyApps/fyrirkongenekkiprest/data2/res.rds")
-stadlar.rallstodvar <- tmp$other.stuff$stadlar.rallstodvar
-
-# stadlar.tegundir
-stadlar.tegundir <-
-  ovog::stadlar_SMH$fiskteg_tegundir |> 
-  dplyr::filter(leidangur_id == lid) |>
-  dplyr::rename(tegund = fisktegund_id) |> 
-  dplyr::arrange(tegund) |>
-  dplyr::select(-c(heildarthyngd_i_kg, maelibretti)) |> 
-  tidyr::gather(variable, value, -c(leidangur_id, tegund)) |>
-  dplyr::mutate(value = value / 100) |>
-  tidyr::spread(variable, value)
-
-
-
-# fisktegundir
-fisktegundir <- ovog::stodtoflur$species
-# stadlar.lw
-d <- 
-  ovog::stadlar_SMH$fiskteg_lengd_thyngd |> 
-  dplyr::rename(tegund = fisktegund_id) |>
-  arrange(tegund, lengd) |> 
-  dplyr::mutate(fravik = fravik/100)
-x <-
-  d |>
-  dplyr::group_by(tegund) |>
-  dplyr::summarise(l.max = max(lengd))
-stadlar.lw <- 
-  expand.grid(tegund = unique(d$tegund),
-              lengd = 1:1500) |>
-  arrange(tegund, lengd) |> 
-  dplyr::as_tibble() |>
-  dplyr::left_join(x, by = "tegund") |>
-  dplyr::filter(lengd <= l.max) |>
-  dplyr::select(-l.max) |>
-  dplyr::left_join(d, by = c("tegund", "lengd")) |>
-  dplyr::arrange(tegund, -lengd) |>
-  dplyr::group_by(tegund) |>
-  tidyr::fill(fravik:slaegt_a) |>
-  dplyr::ungroup() |>
-  dplyr:: mutate(osl = oslaegt_a * lengd^oslaegt_b,
-                 sl = slaegt_a * lengd^slaegt_b) |> 
-  arrange(tegund, lengd) |> 
-  dplyr::mutate(osl1 = osl * (1 - fravik),
-                osl2 = osl * (1 + fravik),
-                sl1 = sl * (1 - fravik),
-                sl2 = sl * (1 + fravik)) |>
-  dplyr::select(tegund, lengd, osl1:sl2)
-
-
-print("Importing of auxillary tables done")
-
-
-
-# IMPORT
-# ----------------------------------------------------------------------------
-
-
-# ----------------------------------------------------------------------------
-# DATA MUNGING
-
-# A. STATIONS DONE - FOR DASHBOARD
-
-by.tegund.lengd.ar <-
-  st |>
-  dplyr::filter(index %in% index.done) |>
-  dplyr::select(synis_id) |>
-  dplyr::left_join(le, by = "synis_id") |>
-  dplyr::group_by(tegund, ar, lengd) |>
-  dplyr::summarise(n.std = sum(n.std, na.rm = TRUE),
-                   b.std = sum(b.std, na.rm = TRUE),
-                   .groups = "drop")
-x <-
-  by.tegund.lengd.ar |>
-  # code added because of bug in TL2-2018
-  dplyr::select(tegund, lengd) |>
-  tidyr::drop_na() |>
-  dplyr::group_by(tegund) |>
-  dplyr::summarise(n = dplyr::n(),
-                   l.min = min(lengd),
-                   l.max = max(lengd))
-res <- list()
-for(i in 1:length(x$tegund)) {
-  res[[i]] <- expand.grid(tegund = x$tegund[i],
-                          lengd = x$l.min[i]:x$l.max[i],
-                          ar = unique(by.tegund.lengd.ar$ar))
-}
-x <- dplyr::bind_rows(res) |> tibble::as_tibble()
-
-by.tegund.lengd.ar <-
-  x |>
-  dplyr::left_join(by.tegund.lengd.ar, by = c("tegund", "lengd", "ar")) |>
-  dplyr::mutate(n.std = ifelse(is.na(n.std), 0, n.std),
-                b.std = ifelse(is.na(b.std), 0, b.std))
-
-by.tegund.lengd.ar.m <-
-  by.tegund.lengd.ar |>
-  dplyr::filter(ar >= 2010) |>
-  dplyr::group_by(tegund, lengd) |>
-  dplyr::summarise(n.year = dplyr::n_distinct(ar),
-                   n.std = sum(n.std, na.rm = TRUE) / n.year,
-                   b.std = sum(b.std, na.rm = TRUE) / n.year,
-                   .groups = "drop")
-print("Length summation 1 done")
-
-by.station <-
-  st |>
-  dplyr::filter(index %in% index.done) |>
-  dplyr::select(synis_id, lon, lat, index) |>
-  dplyr::left_join(le, by = "synis_id") |>
-  dplyr::group_by(ar, index, lon, lat, tegund) |>
-  dplyr::summarise(n.std = sum(n.std, na.rm = TRUE),
-                   b.std = sum(b.std, na.rm = TRUE),
-                   .groups = "drop")
-print("Station summation done")
-
-kv.this.year <-
-  st |>
-  dplyr::filter(ar == now.year,
-                index %in% index.done) |>
-  dplyr::select(synis_id, index, leidstod) |>
-  dplyr::left_join(kv, by = "synis_id") |>
-  dplyr:: mutate(lab = paste0(leidstod, "-", nr)) |>
-  dplyr::left_join(stadlar.lw, by = c("tegund", "lengd")) |>
-  dplyr::mutate(ok.l.osl = dplyr::if_else(oslaegt >= osl1 & oslaegt <= osl2, TRUE, FALSE, TRUE),
-                ok.l.sl = dplyr::if_else(slaegt >= sl1 & slaegt <= sl2, TRUE, FALSE, TRUE)) |>
-  dplyr::select(-c(osl1:sl2)) |>
-  dplyr::left_join(stadlar.tegundir |>
-                     dplyr::select(tegund, kynkirtlar_high:oslaegt_vigtad_low), by = "tegund") |>
-  dplyr::mutate(ok.sl.osl = dplyr::if_else(slaegt/oslaegt >= oslaegt_slaegt_low & slaegt/oslaegt <= oslaegt_slaegt_high, TRUE, FALSE, TRUE),
-                ok.kirtlar.osl = dplyr::if_else(kynfaeri/oslaegt >= kynkirtlar_low & kynfaeri/oslaegt <= kynkirtlar_high, TRUE, FALSE, TRUE),
-                ok.lifur.osl = dplyr::if_else(lifur/oslaegt >= lifur_low & lifur/oslaegt <= lifur_high, TRUE, FALSE, TRUE),
-                ok.magir.osl = dplyr::if_else(magi/oslaegt  >= magi_low & magi/oslaegt <= magi_high, TRUE, FALSE, TRUE)) |>
-  dplyr::select(-c(kynkirtlar_high:oslaegt_vigtad_low))
-print("Otolith summation done")
-
-le.this.year <-
-  le.this.year |>
-  dplyr::left_join(stadlar.tegundir |>
-                     dplyr::select(tegund, lengd_low, lengd_high),
-                   by = "tegund") |>
-  dplyr::mutate(ok.l = dplyr::if_else(lengd >= lengd_low & lengd <= lengd_high, TRUE, FALSE, TRUE)) |>
-  dplyr::select(-c(lengd_low, lengd_high))
-print("Length summation 2 done")
-
-my_boot = function(x, times=100) {
-  
-  # Get column name from input object
-  var = deparse(substitute(x))
-  var = gsub("^\\.\\$","", var)
-  
-  # Bootstrap 95% CI
-  cis = stats::quantile(replicate(times, mean(sample(x, replace=TRUE))), probs=c(0.025,0.975))
-  
-  # Return data frame of results
-  data.frame(var, n=length(x), mean=mean(x), lower.ci=cis[1], upper.ci=cis[2])
-}
-
-print("Bootstrapping abundance:")
-
-by.station.boot.n <-
-  by.station |>
-  dplyr::group_by(tegund, ar) |>
-  dplyr::do(my_boot(.$n.std)) |>
-  dplyr::mutate(variable = "n",
-                var = as.character(var))
-
-print("Bootstrapping biomass:")
-
-by.station.boot.b <-
-  by.station |>
-  dplyr::group_by(tegund, ar) |>
-  dplyr::do(my_boot(.$b.std)) |>
-  dplyr::mutate(variable = "b",
-                var = as.character(var))
-
-by.station.boot <-
-  dplyr::bind_rows(by.station.boot.n, by.station.boot.b)
-
-#-----------------------------------------------------------------------
-# New stuff: boot station and then calc uncertainty by length
-
-
-# Do for all stations -------------------------------------------------
-by.station.all <-
-  st |>
-  dplyr::select(synis_id, lon, lat, index) |>
-  dplyr::left_join(le, by = "synis_id") |>
-  dplyr::group_by(ar, index, lon, lat, tegund) |>
-  dplyr::summarise(n.std = sum(n.std, na.rm = TRUE),
-                   b.std = sum(b.std, na.rm = TRUE),
-                   .groups = "drop")
-
-
-print("Spatial stuff - the new kid on the block (sf)")
-
-
-# I AM HERE - need tows.external
-library(xe)
-library(gisland)
-tows.external <-
-  readr::read_csv(file=paste0(path.package("xe"),"/csv/stations_smh.csv")) |>
-  tibble::as_tibble() |>
-  dplyr::rename(gid = vid) |>
-  dplyr::mutate(lon1 = -geo_convert(lon1),
-                lon2 = -geo_convert(lon2),
-                lat1 =  geo_convert(lat1),
-                lat2 =  geo_convert(lat2)) |>
-  dplyr::mutate(lon2 = ifelse(square == 424 & townumber == 3, -24.7583, lon2))
-
-stadlar.rallstodvar.sf <-
-  tows.external |>
-  dplyr::select(square:townumber, gid,
-                lon_start = lon1, lat_start = lat1,
-                lon_end   = lon2, lat_end   = lat2) |>
-  tidyr::pivot_longer(lon_start:lat_end,
-                      names_to = c(".value", "startend"),
-                      names_sep = "_") |>
-  sf::st_as_sf(coords = c("lon", "lat"),
-               crs = 4326) |>
-  dplyr::group_by(square, townumber, gid) |>
-  dplyr::summarise(do_union = FALSE,
-                   .groups = "drop") |>
-  sf::st_cast("LINESTRING") |>
-  dplyr::mutate(index = paste0(square,
-                               ifelse(townumber < 10,
-                                      paste0("0", townumber),
-                                      townumber),
-                               gid))
-
-
-# SF DONE
-st.done.sf <-
-  st |>
-  dplyr::filter(index %in% index.done) |>
-  dplyr::filter(!is.na(lon1), !is.na(lat1), !is.na(lon2), !is.na(lat2)) |>
-  dplyr::mutate(year = lubridate::year(dags)) |>
-  dplyr::select(index,
-                gid = veidarfaeri,
-                year,
-                lon_start = lon1, lat_start = lat1,
-                lon_end = lon2, lat_end = lat2) |>
-  tidyr::pivot_longer(lon_start:lat_end,
-                      names_to = c(".value", "startend"),
-                      names_sep = "_") |>
-  #dplyr::select(-startend) |>
-  sf::st_as_sf(coords = c("lon", "lat"),
-               crs = 4326) |>
-  dplyr::group_by(index, year, gid) |>
-  dplyr::summarise(do_union = FALSE) |>
-  sf::st_cast("LINESTRING") |>
-  dplyr::ungroup()
-
-# END: SF DONE
-
-print("Spatial stuff - the old faithful")
-
-library(sp)
-tows <-
-  stadlar.rallstodvar |>
-  tidyr::drop_na(kastad_v, kastad_n, hift_v, hift_n)
-
-tows$id2 <- 1:nrow(tows)
-x1 <-
-  tows |>
-  dplyr::select(id2, kastad_v, hift_v) |>
-  tidyr::gather(variable, value, -id2)
-x2 <-
-  tows |>
-  dplyr::select(id2, kastad_n, hift_n) |>
-  tidyr::gather(variable, value, -id2)
-x <- data.frame(id2 = x1$id2, lon = x1$value, lat = x2$value)
-lines_list <- list()
-for (i in 1:max(tows$id2)) {
-  x2 <- sp::Line(x[x$id2 == i,c("lon","lat")])
-  lines_list[[i]] <- sp::Lines(list(x2),ID=as.character(tows$id2[i]))
-}
-sp <-
-  lines_list |>
-  sp::SpatialLines(proj4string = sp::CRS("+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0")) |>
-  sp::SpatialLinesDataFrame(data.frame(id = as.character(tows$id2)))
-sp@data <- cbind(sp@data, tows)
-stadlar.rallstodvar.sp <- sp
-
-tows <-
-  st |>
-  dplyr::filter(index %in% index.done) |>
-  dplyr::filter(!is.na(lon1), !is.na(lat1), !is.na(lon2), !is.na(lat2))
-tows$id2 <- 1:nrow(tows)
-x1 <-
-  tows |>
-  dplyr::select(id2, lon1, lon2) |>
-  tidyr::gather(variable, value, -id2)
-x2 <-
-  tows |>
-  dplyr::select(id2, lat1, lat2) |>
-  tidyr::gather(variable, value, -id2)
-x <- data.frame(id2 = x1$id2, lon = x1$value, lat = x2$value)
-lines_list <- list()
-for (i in 1:max(tows$id2)) {
-  x2 <- sp::Line(x[x$id2 == i,c("lon","lat")])
-  lines_list[[i]] <- sp::Lines(list(x2),ID=as.character(tows$id2[i]))
-}
-sp <-
-  lines_list |>
-  sp::SpatialLines(proj4string = sp::CRS("+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0")) |>
-  sp::SpatialLinesDataFrame(data.frame(id = as.character(tows$id2)))
-sp@data <- cbind(sp@data, tows)
-st.done.sp <- sp
-
-
-
-by.tegund.lengd.ar <-
-  by.tegund.lengd.ar |>
-  dplyr::filter(lengd != 0)
-by.tegund.lengd.ar.m <-
-  by.tegund.lengd.ar.m |>
-  dplyr::filter(lengd != 0)
-
-timi <- lubridate::now() |> as.character()
-
-print("Saving")
-
-dir.create("data2", showWarnings = FALSE)
-save(now.year,
-     index.done,
-     stadlar.rallstodvar.sp,
-     stadlar.rallstodvar.sf,
-     st.done.sp,
-     st.done.sf,
-     st,
-     stadlar.tegundir,
-     stadlar.lw,
-     timi,
-     kv.this.year,
-     le.this.year,
-     nu.this.year,
-     by.tegund.lengd.ar, by.tegund.lengd.ar.m,
-     by.station, fisktegundir,
-     by.station.boot,
-     #by.station.boot.all,
-     file = paste0("data2/", rda.file))
-rda.file = "smb_dashboard.rda"
-print(paste0("Data saved as data2/", rda.file))
-
-readr::write_rds(res2, "data2/res.rds")
-
-
-
-print("HURRA")
-
-
-
+### Mean catch per station
+
+```{r}
+res$boot |> 
+  dplyr::filter(tegund == 1,
+                var == "b") |> 
+  sm_boot_plot()
 ```
 
+### Catch by station
+
+```{r}
+res$by.station |> 
+  dplyr::filter(tegund == 1,
+                var == "b",
+                ar %in% c(seq(2000, 2015, by = 5),
+                          2017:2024)) |>
+  sm_bubble_plot()
+```
+
+### Catch by square
+
+... pending
+
+### Probability of capture
+
+... pending
+
+### Length-ungutted
+
+```{r}
+res |> sm_luw_plot(species = 1)
+```
+
+### Lengths-gutted
+
+```{r}
+res |> sm_lgw_plot(species = 1)
+```
+
+### Lengths vs gutted / ungutted
+
+```{r}
+res |> sm_l_gvu_plot(species = 1)
+```
+
+### Lengths vs liver / ungutted
+
+```{r}
+res |> sm_l_lvu_plot(species = 1)
+```
+
+### Lengths vs gonads / ungutted
+
+```{r}
+res |> sm_l_gonadsvu_plot(species = 1)
+```
+
+### QC table: Length limits
+
+... pending
+
+### QC table: Measurement limits
+
+```{r}
+sm_qc_kvarnir(res)
+```
+
+### Pred-prey figures
+
+... pending
+
+### Prey table
+
+... pending
+
+### Surf and turf
+
+... pending
+
+### Gear metrics - last 20 stations
+
+... pending
+
+### Gear metrics - time trends
+
+... pending
+
+### Temperature - time trends
+
+... pending

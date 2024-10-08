@@ -12,12 +12,14 @@ RoxygenNote: 7.3.2
 Config/Needs/website: rmarkdown
 Imports: 
     dplyr,
+    DT,
     geo,
     ggplot2,
     ggrepel,
     knitr,
     lubridate,
     ovog,
+    stringr,
     tibble,
     tidyr
 Suggests:

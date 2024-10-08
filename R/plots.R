@@ -127,13 +127,13 @@ sm_luw_plot <- function(res, species = 1) {
                          ggplot2::aes(lengd, ymin = osl1, ymax = osl2),
                          fill = "pink") +
     ggplot2::geom_point(data = d |> 
-                          dplyr::filter(ok.l.osl),
+                          dplyr::filter(.l_osl == "ok"),
                         ggplot2::aes(lengd, oslaegt), 
                         size = 1, alpha = 0.5, colour = "blue") +
-    ggplot2::geom_point(data = d |> dplyr::filter(!ok.l.osl), 
+    ggplot2::geom_point(data = d |> dplyr::filter(.l_osl == "check"), 
                         ggplot2::aes(lengd, oslaegt), colour = "red") +
-    ggrepel::geom_text_repel(data = d |> dplyr::filter(!ok.l.osl), 
-                             ggplot2::aes(lengd, oslaegt, label = stod_knr)) +
+    ggrepel::geom_text_repel(data = d |> dplyr::filter(.l_osl == "check"), 
+                             ggplot2::aes(lengd, oslaegt, label = lestnr)) +
     ggplot2::scale_x_log10(breaks = c(seq(5, 50, by = 5), seq(60, 100, by = 10), 120, 140, 160, 200)) +
     ggplot2::scale_y_log10(breaks = c(seq(5, 50, by = 5),
                                       seq(60, 100, by = 10),
@@ -166,13 +166,13 @@ sm_lgw_plot <- function(res, species = 1) {
                          ggplot2::aes(lengd, ymin = sl1, ymax = sl2),
                          fill = "pink") +
     ggplot2::geom_point(data = d |> 
-                          dplyr::filter(ok.l.sl),
+                          dplyr::filter(.l_sl == "ok"),
                         ggplot2::aes(lengd, slaegt), 
                         size = 1, alpha = 0.5, colour = "blue") +
-    ggplot2::geom_point(data = d |> dplyr::filter(!ok.l.sl), 
+    ggplot2::geom_point(data = d |> dplyr::filter(.l_sl == "check"), 
                         ggplot2::aes(lengd, slaegt), colour = "red") +
-    ggrepel::geom_text_repel(data = d |> dplyr::filter(!ok.l.sl), 
-                             ggplot2::aes(lengd, oslaegt, label = stod_knr)) +
+    ggrepel::geom_text_repel(data = d |> dplyr::filter(.l_sl == "check"), 
+                             ggplot2::aes(lengd, slaegt, label = lestnr)) +
     ggplot2::scale_x_log10(breaks = c(seq(5, 50, by = 5), seq(60, 100, by = 10), 120, 140, 160, 200)) +
     ggplot2::scale_y_log10(breaks = c(seq(5, 50, by = 5),
                                       seq(60, 100, by = 10),
@@ -182,4 +182,98 @@ sm_lgw_plot <- function(res, species = 1) {
                                       seq(15000, 30000, by = 1000))) +
     ggplot2::coord_cartesian(xlim = range(d$lengd, na.rm = TRUE),
                              ylim = range(d$oslaegt, na.rm = TRUE))
+}
+
+# NOTE: Should make the following 3 plot construction more simple
+#       This may require prior revamping the data
+
+#' Ratio of gutted to ungutted as a function of length
+#'
+#' @param res list of munged hafvog's tables
+#' @param species Numerical, species to plot
+#'
+#' @return A plot
+#' @export
+#'
+sm_l_gvu_plot <- function(res, species = 1) {
+  
+  d <- 
+    res$kv.this.year |> 
+    dplyr::filter(tegund == species)
+  ggplot2::ggplot() +
+    ggplot2::theme_grey(base_size = 16) +
+    ggplot2::geom_rect(data = res$qc$range |> 
+                           dplyr::filter(tegund == species),
+                         ggplot2::aes(xmin = -Inf, xmax = Inf, ymin = slaegt_low, ymax = slaegt_high),
+                         fill = "pink") +
+    ggplot2::geom_point(data = d |> dplyr::filter(.sl_osl == "ok"),
+                        ggplot2::aes(lengd, slaegt/oslaegt), 
+                        size = 1, alpha = 0.5, colour = "blue") +
+    ggplot2::geom_point(data = d |> dplyr::filter(.sl_osl == "check"), 
+                        ggplot2::aes(lengd, slaegt/oslaegt), colour = "red") +
+    ggrepel::geom_text_repel(data = d |> dplyr::filter(.sl_osl == "check"), 
+                             ggplot2::aes(lengd, slaegt/oslaegt, label = lestnr)) +
+    ggplot2::coord_cartesian(xlim = range(d$lengd, na.rm = TRUE),
+                             ylim = range(d$slaegt/d$oslaegt, na.rm = TRUE))
+}
+
+
+#' Ratio of liver to ungutted as a function of length
+#'
+#' @param res list of munged hafvog's tables
+#' @param species Numerical, species to plot
+#'
+#' @return A plot
+#' @export
+#'
+sm_l_lvu_plot <- function(res, species = 1) {
+  
+  d <- 
+    res$kv.this.year |> 
+    dplyr::filter(tegund == species)
+  ggplot2::ggplot() +
+    ggplot2::theme_grey(base_size = 16) +
+    ggplot2::geom_rect(data = res$qc$range |> 
+                         dplyr::filter(tegund == species),
+                       ggplot2::aes(xmin = -Inf, xmax = Inf, ymin = lifur_low, ymax = lifur_high),
+                       fill = "pink") +
+    ggplot2::geom_point(data = d |> dplyr::filter(.sl_osl == "ok"),
+                        ggplot2::aes(lengd, lifur/oslaegt), 
+                        size = 1, alpha = 0.5, colour = "blue") +
+    ggplot2::geom_point(data = d |> dplyr::filter(.sl_osl == "check"), 
+                        ggplot2::aes(lengd, lifur/oslaegt), colour = "red") +
+    ggrepel::geom_text_repel(data = d |> dplyr::filter(.sl_osl == "check"), 
+                             ggplot2::aes(lengd, lifur/oslaegt, label = lestnr)) +
+    ggplot2::coord_cartesian(xlim = range(d$lengd, na.rm = TRUE),
+                             ylim = range(d$lifur/d$oslaegt, na.rm = TRUE))
+}
+
+#' Ratio of gonads to ungutted as a function of length
+#'
+#' @param res list of munged hafvog's tables
+#' @param species Numerical, species to plot
+#'
+#' @return A plot
+#' @export
+#'
+sm_l_gonadsvu_plot <- function(res, species = 1) {
+  
+  d <- 
+    res$kv.this.year |> 
+    dplyr::filter(tegund == species)
+  ggplot2::ggplot() +
+    ggplot2::theme_grey(base_size = 16) +
+    ggplot2::geom_rect(data = res$qc$range |> 
+                         dplyr::filter(tegund == species),
+                       ggplot2::aes(xmin = -Inf, xmax = Inf, ymin = kynkirtlar_low, ymax = kynkirtlar_high),
+                       fill = "pink") +
+    ggplot2::geom_point(data = d |> dplyr::filter(.kyn == "ok"),
+                        ggplot2::aes(lengd, kynfaeri/oslaegt), 
+                        size = 1, alpha = 0.5, colour = "blue") +
+    ggplot2::geom_point(data = d |> dplyr::filter(.kyn == "check"), 
+                        ggplot2::aes(lengd, kynfaeri/oslaegt), colour = "red") +
+    ggrepel::geom_text_repel(data = d |> dplyr::filter(.kyn == "check"), 
+                             ggplot2::aes(lengd, kynfaeri/oslaegt, label = lestnr)) +
+    ggplot2::coord_cartesian(xlim = range(d$lengd, na.rm = TRUE),
+                             ylim = range(d$kynfaeri/d$oslaegt, na.rm = TRUE))
 }
