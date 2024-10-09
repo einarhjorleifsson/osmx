@@ -40,6 +40,8 @@ utils::globalVariables(
     "prey_thyngd", "species_no",
     "sid",
     
+    "base", "gx", "gy", "lest", "p", "present", "total", "years",
+    
     "."))
 
 

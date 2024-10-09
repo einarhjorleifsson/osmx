@@ -153,6 +153,10 @@ sm_munge <- function(maelingar, stillingar, stodtoflur, current.year = lubridate
     dplyr::inner_join(history$numer,
                       by = dplyr::join_by(leidangur, synis_id))
   
+  
+  res$p_capture <- 
+    sm_calc_capture_probability(history)
+  
   res$stodvar <- dplyr::bind_rows(res$stodvar, history$stodvar |> dplyr::filter(index %in% index.done))
   res$lengdir <- dplyr::bind_rows(res$lengdir, history$lengdir |> dplyr::filter(index %in% index.done) |> dplyr::select(-index))
   res$numer   <- dplyr::bind_rows(res$numer,   history$numer   |> dplyr::filter(index %in% index.done) |> dplyr::select(-index))
@@ -234,6 +238,10 @@ sm_munge <- function(maelingar, stillingar, stodtoflur, current.year = lubridate
     tidyr::complete(tegund, tidyr::nesting(ar, index, lon, lat),
                     fill = list(n = 0, b = 0)) |> 
     tidyr::gather(var, val, c(n, b))
+  
+  res$by.rect <-
+    res |> 
+    sm_calc_by_square()
   
   ## Predator prey -------------------------------------------------------------
   res$pp <- 

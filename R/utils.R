@@ -43,3 +43,25 @@ colour_to_ansi <- function(colour) {
 coloured_print <- function(text, colour = "green") {
   cat(colour_to_ansi(colour), text, "\033[0m\n")
 }
+
+
+grade <- function (x, dx) {
+  if (dx > 1) 
+    warning("Not tested for grids larger than one")
+  brks <- seq(floor(min(x)), ceiling(max(x)), dx)
+  ints <- findInterval(x, brks, all.inside = TRUE)
+  x <- (brks[ints] + brks[ints + 1])/2
+  return(x)
+}
+
+
+scale_longitude_ices <- function(min = -44, max = 68.5, step = 1, ...) {
+  breaks <- seq(min + 0.5, max - 0.5, step)
+  labels <- geo::d2ir(60, breaks) |>  stringr::str_sub(3)
+  return(ggplot2::scale_x_continuous(name = NULL, breaks = breaks, labels = labels, ...))
+}
+scale_latitude_ices <- function(min = 36, max = 84.5, step = 0.5, ...) {
+  breaks <- seq(min + 0.25, max - 0.25, step)
+  labels <- geo::d2ir(breaks, 0) |>  stringr::str_sub(1, 2)
+  return(ggplot2::scale_y_continuous(name = NULL, breaks = breaks, labels = labels, ...))
+}

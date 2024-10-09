@@ -333,3 +333,63 @@ sm_plot_last20 <- function(d) {
   return(p)
   
 }
+
+#' Species probability of capture
+#'
+#' @param d A tibble
+#'
+#' @return A plot
+#' @export
+#'
+sm_plot_probability <- function(d) {
+  d |> 
+    dplyr::mutate(p = ifelse(p == 0, NA, p)) |> 
+    ggplot2::ggplot(ggplot2::aes(lon, lat)) +
+    ggplot2::theme_bw() +
+    ggplot2::geom_tile(ggplot2::aes(fill =p)) +
+    ggplot2::geom_polygon(data = geo::island, fill = "grey") +
+    ggplot2::coord_quickmap() +
+    ggplot2::scale_fill_viridis_c(option  = "magma", direction = -1, limits = c(0, 1)) +
+    ggplot2::labs(x = NULL, y = NULL, fill = "Probability",
+                  caption = "Cyan: Caught this year")
+}
+
+
+#' Species indices by rectangle
+#'
+#' @param d A tibble with data by rectangle
+#'
+#' @return A plot
+#' @export
+#'
+sm_plot_glyph <- function(d) {
+  
+  n.glyph <- 
+    d |> 
+    GGally::glyphs(x_major = "lon", 
+                   y_major = "lat",
+                   x_minor = "ar", 
+                   y_minor = "val", 
+                   width = 1, 
+                   height = 0.5)
+  
+  n.glyph |> 
+    dplyr::mutate(years = ifelse(ar < max(ar), "history", "current"),
+                  pos = ifelse(val != 0, TRUE, FALSE),
+                  base = lat - 0.25,
+                  gy = ifelse(val == 0, gy + 0.005, gy)) |> 
+    ggplot2::ggplot() +
+    ggplot2::theme_bw() +
+    ggplot2::geom_linerange(ggplot2::aes(x = gx, ymin = base, ymax = gy,
+                                         colour = years)) +
+    ggplot2::geom_path(data = geo::island, ggplot2::aes(lon, lat)) +
+    ggplot2::coord_quickmap() +
+    scale_longitude_ices() +
+    scale_latitude_ices() +
+    ggplot2::scale_colour_manual(values = c("history" = "#377EB8", "current" = "#E41A1C")) +
+    ggplot2::theme(panel.grid.major = ggplot2::element_blank(),
+                   panel.grid.minor = ggplot2::element_line(size = 1),
+                   axis.ticks = ggplot2::element_blank(),
+                   legend.position = "none") 
+  
+}

@@ -4,10 +4,10 @@
 \alias{sm_table_kvarnir}
 \title{Create a table where measurements are susspect}
 \usage{
-sm_table_kvarnir(res)
+sm_table_kvarnir(d)
 }
 \arguments{
-\item{res}{A list}
+\item{d}{A table}
 }
 \value{
 a DT table

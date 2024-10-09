@@ -109,11 +109,38 @@ res$by.station |>
 
 ### Catch by square
 
-... pending
+```{r}
+res$by.rect |> 
+  dplyr::filter(tegund == 4,
+                var == "n") |> 
+  sm_plot_glyph()
+```
+
+```{r}
+res$by.rect |> 
+  dplyr::filter(tegund == 1,
+                var == "b") |> 
+  sm_plot_glyph()
+```
 
 ### Probability of capture
 
-... pending
+```{r}
+tmp <- 
+  res$by.station |> 
+  dplyr::filter(ar == max(ar), tegund == 22, var == "n") |> 
+  dplyr::mutate(val = ifelse(val == 0, "absent", "present")) |> 
+  dplyr::select(lon, lat, val)
+res$p_capture |> 
+  dplyr::filter(tegund == 22) |> 
+  sm_plot_probability() +
+  ggplot2::geom_point(data = tmp, 
+                      ggplot2::aes(lon, lat, colour = val),
+                      size = 0.5) +
+  ggplot2::scale_colour_manual(values = c("present" = "cyan", "absent" = "white"),
+                               guide = "none")
+```
+
 
 ### Length-ungutted
 
@@ -167,22 +194,73 @@ res$pp |>
   sm_table_prey()
 ```
 
+### Prey histogram
+
+```{r}
+### Þyngdardreifing á bráð - Topp 20 bráðir
+
+# applly some filter
+pp <- 
+  res$pp |> 
+  #dplyr::filter(leidangur %in% input$Leidangur) |> 
+  dplyr::filter(astand == 1,
+                # brað verdur ad vera skilgreind
+                !is.na(prey),
+                # verður að hafa mælingu thyngd
+                !is.na(heildarthyngd),
+                # verður að hafa mælingu talid
+                !is.na(n)) |> 
+  dplyr::mutate(m.thyngd = round(heildarthyngd / n, 2))
+
+# not really mean based on individual prey measurements
+pp.mean <- 
+  pp |> 
+  dplyr::group_by(prey) |> 
+  dplyr::summarise(fjoldi = sum(n),
+                   mean = sum(heildarthyngd) / sum(n)) |> 
+  dplyr::ungroup() |> 
+  dplyr::arrange(-fjoldi)
+
+# top 20 (bráð) tegundir "mældar"
+top20 <-
+  pp.mean |> 
+  dplyr::slice(1:20)
+top20.brad <-
+  top20 |> 
+  dplyr::pull(prey)
+
+pp |> 
+  #dplyr::filter(leidangur %in% input$Leidangur) |> 
+  dplyr::filter(prey %in% top20.brad) |> 
+  ggplot2::ggplot() +
+  ggplot2::geom_histogram(ggplot2::aes(m.thyngd)) +
+  ggplot2::geom_vline(data = top20, 
+                      ggplot2::aes(xintercept = mean), colour = "red") +
+  ggplot2::facet_wrap(~ prey, scale = "free") +
+  ggplot2::labs(x = "Meðalþyngd", y = "Fjöldi")
+```
+
 ### Prey table - summarise by predator
 
 ```{r}
-res$pp |> 
+tmp <- 
+  res$pp |> 
   dplyr::filter(leidangur %in% "TB2-2024") |> 
   dplyr::group_by(leidangur, stod, fiskur, fnr, flengd, oslaegt, astand ) |> 
   dplyr::reframe(n = sum(n, na.rm = TRUE),
                  wt = sum(heildarthyngd, na.rm = TRUE)) |>
-  dplyr::mutate(magafylli = round(wt / oslaegt, 3)) |> 
+  dplyr::mutate(magafylli = round(wt / oslaegt, 3)) 
+tmp |> 
   sm_table_prey()
 ```
 
 ### Pred-prey figures
 
 ```{r}
-
+tmp |> 
+  ggplot2::ggplot() +
+  ggplot2::geom_histogram(ggplot2::aes(magafylli)) +
+  ggplot2::facet_wrap(~ fiskur, scales = "free")
 ```
 
 
