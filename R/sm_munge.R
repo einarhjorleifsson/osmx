@@ -367,6 +367,24 @@ sm_munge <- function(maelingar, stillingar, stodtoflur, current.year = lubridate
     res |> 
     sm_boot()
   
+  # ----------------------------------------------------------------------------
+  res$leidangrar <- 
+    res$stodvar |> 
+    dplyr::filter(ar == max(ar)) |> 
+    dplyr::pull(leidangur) |> unique() |> sort()
+  res$tegundir <-
+    res$numer |> 
+    dplyr::filter(leidangur %in% res$leidangrar) |> 
+    dplyr::select(tegund) |> 
+    dplyr::distinct() |> 
+    dplyr::arrange(tegund) |> 
+    dplyr::left_join(res$stodtoflur$species_v |> 
+                       dplyr::select(tegund = species_no,
+                                     name),
+                     by = dplyr::join_by(tegund))
+  res$timi <- lubridate::now()
+
+  
   coloured_print("\nHURRA!", "green")
   return(res)
   
