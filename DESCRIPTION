@@ -19,6 +19,7 @@ Imports:
     knitr,
     lubridate,
     ovog,
+    stats,
     stringr,
     tibble,
     tidyr

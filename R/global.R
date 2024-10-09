@@ -36,6 +36,10 @@ utils::globalVariables(
     
     ".kyn", ".l_osl", ".l_sl", ".sl_osl", ".lif",
     "lestnr",
+    "astand", "name", "prey", "prey_heildarthyngd",  "prey_kyn", "prey_lengd", "prey_nn",
+    "prey_thyngd", "species_no",
+    "sid",
+    
     "."))
 
 

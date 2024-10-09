@@ -3,10 +3,10 @@
 #'
 #' @param res A list
 #'
-#' @return
+#' @return a DT table
 #' @export
 #'
-sm_qc_kvarnir <- function(res) {
+sm_table_kvarnir <- function(res) {
   d <- 
     res$kv.this.year |> 
     dplyr::filter(.l_osl == "check" | .l_sl == "check" | .sl_osl == "check" | .kyn == "check" | .lif == "check") |> 
@@ -27,3 +27,21 @@ sm_qc_kvarnir <- function(res) {
   
   return(table) 
 }
+
+#' A list of prey measurments
+#'
+#' @param d A tibble
+#'
+#' @return a DT table
+#' @export
+#'
+sm_table_prey <- function(d) {
+  d |> 
+    DT::datatable(extensions = 'Scroller',
+                  rownames = FALSE,
+                  options = list(deferRender = TRUE,
+                                 scrollY = 700,
+                                 scroller = TRUE
+                  ))
+}
+

@@ -2,18 +2,21 @@
 # devtools::load_all()
 # maelingar <- c("data-raw/SMH/TB2-2024.zip", "data-raw/SMH/TTH1-2024.zip")
 # stillingar <- c("data-raw/SMH/stillingar_SMH_rall_(haust).zip")
-# tmp <- sm_munge(maelingar, stillingar)
+# stodtoflur <- c("data-raw/SMH/stodtoflur.zip")
+# current.year = lubridate::year(lubridate::today())
+# res <- sm_munge(maelingar, stillingar, stodtoflur)
 
 #' Prepares data for the smxapp
 #'
 #' @param maelingar Names of hafvog zip files to be imported
 #' @param stillingar Name of "stillingar" zip file to be imported
+#' @param stodtoflur Name of "stodtoflur" zip file to be imported
 #' @param current.year The current survey year
 #'
 #' @return a list
 #' @export
 #'
-sm_munge <- function(maelingar, stillingar, current.year = lubridate::year(lubridate::today())) {
+sm_munge <- function(maelingar, stillingar, stodtoflur, current.year = lubridate::year(lubridate::today())) {
   
   # IMPORT --------------------------------------------------------------------
   coloured_print("IMPORT", colour = "green")
@@ -39,9 +42,7 @@ sm_munge <- function(maelingar, stillingar, current.year = lubridate::year(lubri
                   hift_breidd = hift_n_breidd,
                   veidarfaeri = fishing_gear_no) |> 
     dplyr::mutate(kastad_lengd = -kastad_lengd,
-                  hift_lengd   = -hift_lengd,
-                  index = dplyr::case_when(!is.na(reitur) & !is.na(tognumer) & !is.na(veidarfaeri) ~ (reitur * 100 + tognumer) * 100 + veidarfaeri,
-                                           .default = -1))
+                  hift_lengd   = -hift_lengd)
   ### Some tests ---------------------------------------------------------------
   if(any(is.na(res$stodvar$reitur))) {
     coloured_print("Reitur is missing, this may create trouble downstream", colour = "red")
@@ -67,6 +68,31 @@ sm_munge <- function(maelingar, stillingar, current.year = lubridate::year(lubri
       knitr::kable(caption = "Stations with missing gear") |> 
       print()
   }
+  # index text - should be unique within a cruise
+  tmp <- 
+    res$stodvar |> 
+    dplyr::select(leidangur, stod, reitur, tognumer, veidarfaeri) |> 
+    dplyr::distinct() |> 
+    dplyr::group_by(leidangur, reitur, tognumer, veidarfaeri) |> 
+    dplyr::mutate(n = dplyr::n()) |> 
+    dplyr::ungroup() |> 
+    dplyr::filter(n > 1) |> 
+    dplyr::select(-n)
+  if(nrow(tmp) > 1) {
+    coloured_print("Some stations have duplicate reitur-tognumer-veidarfaeri", colour = "red")
+    coloured_print("This creates troubles donwstream so I will have to stop here", colour = "red")
+    tmp |> 
+      knitr::kable(caption = "Tables that have duplicate reitur-tognumer-veidarfaeri") |> 
+      print()
+    stop("Please fix in Hafvog, dump and then try again")
+  }
+  
+  res$stodvar <- 
+    res$stodvar |> 
+    dplyr::mutate(index = dplyr::case_when(!is.na(reitur) & !is.na(tognumer) & !is.na(veidarfaeri) ~ (reitur * 100 + tognumer) * 100 + veidarfaeri,
+                             .default = -1))
+  
+  
   current.synaflokkur <- unique(res$stodvar$synaflokkur)
   coloured_print(paste0("The 'synaflokkur' of the zip files is: ", current.synaflokkur), colour = "green") 
   if(length(current.synaflokkur) > 1) {
@@ -86,6 +112,17 @@ sm_munge <- function(maelingar, stillingar, current.year = lubridate::year(lubri
     stop("Fix the file path of setup files")
   }
   res$stillingar <- ovog::hv_import_stillingar(stillingar)
+  
+  ## Stodtoflur ----------------------------------------------------------------
+  coloured_print("Import setup ('stodtoflur')", colour = "green")
+  if(!any(file.exists(stillingar))) {
+    warning("At least one of the setup ('stodtoflur') files does not exist")
+    tibble::tibble(file = stodtoflur,
+                   exists = file.exists(stodtoflur)) |> 
+      knitr::kable(caption = "List of files to import and if they exist or not")
+    stop("Fix the file path of setup files")
+  }
+  res$stodtoflur <- ovog::hv_import_stodtoflur(stodtoflur)
   
   ## Historical measurments ----------------------------------------------------
   # uses data in {mardata}
@@ -198,61 +235,58 @@ sm_munge <- function(maelingar, stillingar, current.year = lubridate::year(lubri
                     fill = list(n = 0, b = 0)) |> 
     tidyr::gather(var, val, c(n, b))
   
-  ## The boot ------------------------------------------------------------------
-  res <- 
-    res |> 
-    sm_boot()
+  ## Predator prey -------------------------------------------------------------
+  res$pp <- 
+    res$pp |> 
+    dplyr::rename(sid = prey) |> 
+    dplyr::left_join(res$stodtoflur$species_v |> 
+                       dplyr::select(sid = species_no, prey = name),
+                     by = dplyr::join_by(sid)) |> 
+    dplyr::select(leidangur:astand, prey, pnr:heildarthyngd)
   
   ## Trawl metrics and temperature ---------------------------------------------
   coloured_print("\nTrawl metrics and temperature", colour = "green")
-  ### Last 20 tows -------------------------------------------------------------
-  coloured_print("Last 20 tows", colour = "green")
-  
-  res$last.20 <-
-    res$stodvar |>  
-    dplyr::filter(ar == current.year) |> 
-    dplyr::arrange(leidangur, dplyr::desc(togbyrjun)) |> 
-    dplyr::group_by(leidangur) |> 
-    dplyr::slice(1:20) |> 
-    dplyr::mutate(id = dplyr::n():1) |> 
-    dplyr::ungroup() |> 
-    dplyr::select(leidangur, id, index) |> 
-    dplyr::left_join(res$stodvar |> 
-                       dplyr::select(index, ar, larett_opnun, lodrett_opnun,
-                                     botnhiti, yfirbordshiti, vir_uti),
-                     by = dplyr::join_by(index)) |>
-    tidyr::gather(variable, value, larett_opnun:vir_uti) |> 
-    dplyr::filter(!is.na(value))
-  
   ### Timetrend ------------------------------------------------------------------
   coloured_print("Time series", colour = "green")
   # Here first get the index for the current leidangur then join by index
   #  so all past data have current leidangur associated with the current
   #  intex
+  
+  # HOW CAN ONE DO THIS WITHOUT USING INDEX TOO MUCH
+  tmp <- 
+    res$stodvar |> 
+    dplyr::filter(ar == max(ar)) |> 
+    dplyr::select(leidangur, stod, index) |> 
+    dplyr::arrange(leidangur, stod)
+
   res$timetrend <-
-    res$stodvar |>
-    dplyr::select(leidangur, synis_id, ar, 
-                  larett_opnun, lodrett_opnun,
-                  botnhiti, yfirbordshiti, vir_uti) |> 
-    tidyr::gather(variable, value, larett_opnun:vir_uti)
+    tmp |> 
+    dplyr::select(leidangur, index) |> 
+    dplyr::distinct() |> 
+    dplyr::left_join(res$stodvar |> 
+                       dplyr::select(index, ar, larett_opnun, lodrett_opnun, 
+                                     vir_uti, botnhiti, yfirbordshiti) |> 
+                       dplyr::mutate(vir_uti = ifelse(ar < max(ar), vir_uti / 1.8288, vir_uti)),
+                     by = dplyr::join_by(index)) |> 
+    dplyr::left_join(tmp |> 
+                       dplyr::select(index, stod),
+                     by = dplyr::join_by(index)) |> 
+    dplyr::select(leidangur, index, stod, ar, dplyr::everything()) |> 
+    dplyr::arrange(leidangur, dplyr::desc(stod), dplyr::desc(ar)) |> 
+    tidyr::gather(var, val, -c(leidangur:ar))
   
-  missing <- 
+  ### Last 20 tows -------------------------------------------------------------
+  coloured_print("Last 20 tows", colour = "green")
+  
+  res$timetrend.20 <-
     res$timetrend |> 
-    dplyr::filter(ar == current.year) |> 
-    dplyr::filter(is.na(value))
-  if(nrow(missing) > 1) {
-    coloured_print(paste0("Unexpected - missing values\n"), colour = "red")
-    coloured_print("Missing values will be dropped\n", colour = "red")
-    missing |> 
-      knitr::kable(caption = "List of variables with missing values:") |> 
-      print()
-  }
-  
-  res$timetrend <- 
-    res$timetrend |> 
-    dplyr::filter(!is.na(value))
-  
-  
+    tidyr::spread(var, val) |> 
+    dplyr::arrange(dplyr::desc(leidangur), dplyr::desc(ar), dplyr::desc(stod)) |> 
+    dplyr::group_by(leidangur, ar) |> 
+    dplyr::slice(1:20) |> 
+    dplyr::ungroup() |> 
+    tidyr::gather(var, val, -c(leidangur:ar))
+
   
   # QUALITY CONTROL ------------------------------------------------------------
   ## tidy stillingar -----------------------------------------------------------
@@ -321,6 +355,10 @@ sm_munge <- function(maelingar, stillingar, current.year = lubridate::year(lubri
                   dplyr::everything()) |> 
     dplyr::arrange(leidangur, stod, tegund, nr)
   
+  # THE BOOT ------------------------------------------------------------------
+  res <- 
+    res |> 
+    sm_boot()
   
   coloured_print("\nHURRA!", "green")
   return(res)

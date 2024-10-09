@@ -7,6 +7,7 @@
 sm_munge(
   maelingar,
   stillingar,
+  stodtoflur,
   current.year = lubridate::year(lubridate::today())
 )
 }
@@ -14,6 +15,8 @@ sm_munge(
 \item{maelingar}{Names of hafvog zip files to be imported}
 
 \item{stillingar}{Name of "stillingar" zip file to be imported}
+
+\item{stodtoflur}{Name of "stodtoflur" zip file to be imported}
 
 \item{current.year}{The current survey year}
 }

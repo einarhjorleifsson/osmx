@@ -5,7 +5,7 @@
 #' @return a ggplot
 #' @export
 #'
-sm_length_plot <- function(d) {
+sm_plot_lengths <- function(d) {
   
   var <- unique(d$var)
   my.lab <- dplyr::case_when(var == "n" ~ "Fjoldi i hverju lengdarbili",
@@ -42,8 +42,7 @@ sm_length_plot <- function(d) {
 }
 
 
-
-sm_bubble_plot_base <- function(xlim = c(-30, -10), ylim = c(62.5, 67.5)) {
+sm_plot_bubble_base <- function(xlim = c(-30, -10), ylim = c(62.5, 67.5)) {
   ggplot2::ggplot() +
     ggplot2::theme_grey(base_size = 16) +
     ggplot2::geom_path(data = geo::island, ggplot2::aes(lon, lat)) +
@@ -59,14 +58,14 @@ sm_bubble_plot_base <- function(xlim = c(-30, -10), ylim = c(62.5, 67.5)) {
 #' @return a plot
 #' @export
 #'
-sm_bubble_plot <- function(d) { 
+sm_plot_bubble <- function(d) { 
   
   var <- unique(d$var)
   zlab <- dplyr::case_when(var == "n" ~ "Stykki",
                            var == "b" ~ "Afli [kg]",
                            .default = "what")
   
-  sm_bubble_plot_base() +
+  sm_plot_bubble_base() +
     ggplot2::geom_point(data = d |> dplyr::filter(val == 0),
                         ggplot2::aes(lon, lat),
                         colour = "blue",
@@ -87,7 +86,7 @@ sm_bubble_plot <- function(d) {
 #' @return a plot
 #' @export
 #'
-sm_boot_plot <- function(d) {
+sm_plot_boot <- function(d) {
   
   var <- unique(d$var)
   ylab <- dplyr::case_when(var == "n" ~ "Fjoldi i togi",
@@ -115,7 +114,7 @@ sm_boot_plot <- function(d) {
 #' @return A plot
 #' @export
 #'
-sm_luw_plot <- function(res, species = 1) {
+sm_plot_length_ungutted <- function(res, species = 1) {
   
   d <- 
     res$kv.this.year |> 
@@ -154,7 +153,7 @@ sm_luw_plot <- function(res, species = 1) {
 #' @return A plot
 #' @export
 #'
-sm_lgw_plot <- function(res, species = 1) {
+sm_plot_length_gutted <- function(res, species = 1) {
   
   d <- 
     res$kv.this.year |> 
@@ -195,7 +194,7 @@ sm_lgw_plot <- function(res, species = 1) {
 #' @return A plot
 #' @export
 #'
-sm_l_gvu_plot <- function(res, species = 1) {
+sm_plot_weights <- function(res, species = 1) {
   
   d <- 
     res$kv.this.year |> 
@@ -226,7 +225,7 @@ sm_l_gvu_plot <- function(res, species = 1) {
 #' @return A plot
 #' @export
 #'
-sm_l_lvu_plot <- function(res, species = 1) {
+sm_plot_liver <- function(res, species = 1) {
   
   d <- 
     res$kv.this.year |> 
@@ -256,7 +255,7 @@ sm_l_lvu_plot <- function(res, species = 1) {
 #' @return A plot
 #' @export
 #'
-sm_l_gonadsvu_plot <- function(res, species = 1) {
+sm_plot_gonads <- function(res, species = 1) {
   
   d <- 
     res$kv.this.year |> 
@@ -276,4 +275,61 @@ sm_l_gonadsvu_plot <- function(res, species = 1) {
                              ggplot2::aes(lengd, kynfaeri/oslaegt, label = lestnr)) +
     ggplot2::coord_cartesian(xlim = range(d$lengd, na.rm = TRUE),
                              ylim = range(d$kynfaeri/d$oslaegt, na.rm = TRUE))
+}
+
+#' Violin plot
+#'
+#' @param timetrend A tibble
+#'
+#' @return ggplot2
+#' @export
+#'
+sm_plot_violin <- function(timetrend) {
+  
+  d.median <- 
+    timetrend |> 
+    dplyr::group_by(ar, var)  |>  
+    dplyr::reframe(val = stats::median(val, na.rm = TRUE))
+  p <- 
+    timetrend |>  
+    ggplot2::ggplot(ggplot2::aes(ar, val)) +
+    ggplot2::theme_bw(base_size = 24) +
+    ggplot2::geom_violin(ggplot2::aes(group = ar), scale = "width") +
+    ggplot2::geom_jitter(ggplot2::aes(group = ar), alpha = 0.2, colour = "red", size = 0.5) + 
+    ggplot2::geom_line(data = d.median,
+                       colour = "blue") +
+    ggplot2::facet_wrap(~ var, scale = "free_y") +
+    ggplot2::labs(x = NULL, y = NULL)
+  return(p)
+}
+
+#' Last 20 plot
+#'
+#' @param d A tibble
+#'
+#' @return ggplot2
+#' @export
+#'
+sm_plot_last20 <- function(d) {
+  
+  x <- max(d$ar)
+  yrs <- (x-1):(x - 10)
+  
+  p <- 
+    d |> 
+    dplyr::filter(ar %in% yrs) |> 
+    ggplot2::ggplot() +
+    ggplot2::geom_line(ggplot2::aes(stod, val, colour = factor(ar))) +
+    ggplot2::geom_line(data = d |> 
+                         dplyr::filter(ar == max(ar)),
+                       ggplot2::aes(stod, val), 
+              linewidth = 1,
+              colour = "red") +
+    ggplot2::facet_grid(leidangur ~ var, scales = "free") +
+    ggplot2::labs(y = "Stodvarnumer", y = NULL, colour = "Ar") +
+    ggplot2::coord_flip() +
+    ggplot2::scale_color_viridis_d(direction = -1)
+  
+  return(p)
+  
 }

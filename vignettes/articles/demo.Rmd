@@ -69,8 +69,10 @@ measurement$lengdir |>
 Normally we would ...
 
 ```{r}
+cruises <- c("~/R/Pakkar2/osmx/data-raw/SMH/TB2-2024.zip", "~/R/Pakkar2/osmx/data-raw/SMH/TTH1-2024.zip")
 stillingar <- c("~/R/Pakkar2/osmx/data-raw/SMH/stillingar_SMH_rall_(haust).zip")
-res <- sm_munge(cruises, stillingar)
+stodtoflur <- c("~/R/Pakkar2/osmx/data-raw/SMH/stodtoflur.zip")
+res <- sm_munge(cruises, stillingar, stodtoflur)
 ```
 
 ## Exploration outside the smx-app
@@ -82,7 +84,7 @@ res$by.length |>
   dplyr::filter(tegund == 2,
                 ar >= 2010) |> 
   dplyr::filter(var == "n") |> 
-  sm_length_plot()
+  sm_plot_lengths()
 ```
 
 ### Mean catch per station
@@ -91,7 +93,7 @@ res$by.length |>
 res$boot |> 
   dplyr::filter(tegund == 1,
                 var == "b") |> 
-  sm_boot_plot()
+  sm_plot_boot()
 ```
 
 ### Catch by station
@@ -102,7 +104,7 @@ res$by.station |>
                 var == "b",
                 ar %in% c(seq(2000, 2015, by = 5),
                           2017:2024)) |>
-  sm_bubble_plot()
+  sm_plot_bubble()
 ```
 
 ### Catch by square
@@ -116,31 +118,31 @@ res$by.station |>
 ### Length-ungutted
 
 ```{r}
-res |> sm_luw_plot(species = 1)
+res |> sm_plot_length_ungutted()
 ```
 
 ### Lengths-gutted
 
 ```{r}
-res |> sm_lgw_plot(species = 1)
+res |> sm_plot_length_gutted()
 ```
 
 ### Lengths vs gutted / ungutted
 
 ```{r}
-res |> sm_l_gvu_plot(species = 1)
+res |> sm_plot_weights()
 ```
 
 ### Lengths vs liver / ungutted
 
 ```{r}
-res |> sm_l_lvu_plot(species = 1)
+res |> sm_plot_liver()
 ```
 
 ### Lengths vs gonads / ungutted
 
 ```{r}
-res |> sm_l_gonadsvu_plot(species = 1)
+res |> sm_plot_gonads()
 ```
 
 ### QC table: Length limits
@@ -149,17 +151,37 @@ res |> sm_l_gonadsvu_plot(species = 1)
 
 ### QC table: Measurement limits
 
-```{r}
-sm_qc_kvarnir(res)
-```
-
-### Pred-prey figures
-
 ... pending
 
 ### Prey table
 
-... pending
+```{r}
+res$pp |> 
+  dplyr::filter(leidangur %in% "TB2-2024",
+         astand %in% 1) |> 
+  sm_table_prey()
+```
+
+### Prey table - summarise by predator
+
+```{r}
+res$pp |> 
+  dplyr::filter(leidangur %in% "TB2-2024") |> 
+  dplyr::group_by(leidangur, stod, fiskur, fnr, flengd, oslaegt, astand ) |> 
+  dplyr::reframe(n = sum(n, na.rm = TRUE),
+          wt = sum(heildarthyngd, na.rm = TRUE)) |>
+  dplyr::mutate(magafylli = round(wt / oslaegt, 3)) |> 
+  sm_table_prey()
+```
+
+### Pred-prey figures
+
+```{r}
+
+```
+
+
+
 
 ### Surf and turf
 
@@ -167,12 +189,38 @@ sm_qc_kvarnir(res)
 
 ### Gear metrics - last 20 stations
 
-... pending
+```{r}
+res$timetrend.20 |> 
+  filter(leidangur %in% "TB2-2024",
+         var %in% c("larett_opnun", "lodrett_opnun", "vir_uti")) |> 
+  sm_plot_last20()
+```
+
+### Temperatures - last 20 stations
+
+```{r}
+res$timetrend.20 |> 
+  filter(leidangur %in% "TB2-2024",
+         var %in% c("botnhiti", "yfirbordshiti")) |> 
+  sm_plot_last20()
+```
 
 ### Gear metrics - time trends
 
-... pending
+```{r}
+res$timetrend |> 
+  filter(leidangur %in% "TB2-2024",
+         var %in% c("larett_opnun", "lodrett_opnun", "vir_uti")) |> 
+  sm_plot_violin()
+```
+
 
 ### Temperature - time trends
 
-... pending
+```{r}
+res$timetrend |> 
+  filter(leidangur %in% "TB2-2024",
+         var %in% c("botnhiti", "yfirbordshiti")) |> 
+  sm_plot_violin()
+```
+
