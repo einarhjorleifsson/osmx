@@ -90,7 +90,7 @@ sm_munge <- function(maelingar, stillingar, stodtoflur, current.year = lubridate
   res$stodvar <- 
     res$stodvar |> 
     dplyr::mutate(index = dplyr::case_when(!is.na(reitur) & !is.na(tognumer) & !is.na(veidarfaeri) ~ (reitur * 100 + tognumer) * 100 + veidarfaeri,
-                             .default = -1))
+                                           .default = -1))
   
   
   current.synaflokkur <- unique(res$stodvar$synaflokkur)
@@ -146,12 +146,12 @@ sm_munge <- function(maelingar, stillingar, stodtoflur, current.year = lubridate
     history$stodvar |> 
     dplyr::select(leidangur, synis_id, index) |> 
     dplyr::inner_join(history$lengdir,
-                     by = dplyr::join_by(leidangur, synis_id))
+                      by = dplyr::join_by(leidangur, synis_id))
   history$numer <-
     history$stodvar |> 
     dplyr::select(leidangur, synis_id, index) |> 
     dplyr::inner_join(history$numer,
-                     by = dplyr::join_by(leidangur, synis_id))
+                      by = dplyr::join_by(leidangur, synis_id))
   
   res$stodvar <- dplyr::bind_rows(res$stodvar, history$stodvar |> dplyr::filter(index %in% index.done))
   res$lengdir <- dplyr::bind_rows(res$lengdir, history$lengdir |> dplyr::filter(index %in% index.done) |> dplyr::select(-index))
@@ -258,7 +258,7 @@ sm_munge <- function(maelingar, stillingar, stodtoflur, current.year = lubridate
     dplyr::filter(ar == max(ar)) |> 
     dplyr::select(leidangur, stod, index) |> 
     dplyr::arrange(leidangur, stod)
-
+  
   res$timetrend <-
     tmp |> 
     dplyr::select(leidangur, index) |> 
@@ -286,7 +286,7 @@ sm_munge <- function(maelingar, stillingar, stodtoflur, current.year = lubridate
     dplyr::slice(1:20) |> 
     dplyr::ungroup() |> 
     tidyr::gather(var, val, -c(leidangur:ar))
-
+  
   
   # QUALITY CONTROL ------------------------------------------------------------
   ## tidy stillingar -----------------------------------------------------------
@@ -316,7 +316,6 @@ sm_munge <- function(maelingar, stillingar, stodtoflur, current.year = lubridate
     res$kv.this.year |> 
     dplyr::left_join(res$qc$lw, 
                      by = dplyr::join_by(tegund, lengd)) |> 
-    dplyr::arrange(tegund, lengd) |> 
     dplyr::mutate(.l_osl = dplyr::if_else(dplyr::between(oslaegt, osl1, osl2), "ok", "check", "na"),
                   .l_sl  = dplyr::if_else(dplyr::between(slaegt,   sl1,  sl2), "ok", "check", "na")) |> 
     dplyr::select(-c(osl1, osl2, sl1, sl2))
@@ -344,13 +343,13 @@ sm_munge <- function(maelingar, stillingar, stodtoflur, current.year = lubridate
   coloured_print("Formatting QC table", colour = "green")
   res$kv.this.year <- 
     res$kv.this.year |> 
-    dplyr::mutate(lestnr = 
+    dplyr::mutate(lest = 
+                    # Not the best way to find shortcut for leidangur
                     paste0(stringr::str_sub(leidangur, 1, 3) |> stringr::str_remove("-"),
                            "-",
-                           stod,
-                           "-",
-                           nr)) |> 
-    dplyr::select(lestnr, tegund, lengd, oslaegt, slaegt, lifur, kynfaeri,
+                           stringr::str_pad(stod, pad = "0", width = 3)),
+                  lestnr = paste0(lest, "-", nr)) |> 
+    dplyr::select(lest, tegund, nr, lengd, oslaegt, slaegt, lifur, kynfaeri,
                   .l_osl, .l_sl, .sl_osl, .kyn, .lif,
                   dplyr::everything()) |> 
     dplyr::arrange(leidangur, stod, tegund, nr)

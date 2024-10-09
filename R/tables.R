@@ -1,16 +1,16 @@
 
 #' Create a table where measurements are susspect
 #'
-#' @param res A list
+#' @param d A table
 #'
 #' @return a DT table
 #' @export
 #'
-sm_table_kvarnir <- function(res) {
+sm_table_kvarnir <- function(d) {
   d <- 
-    res$kv.this.year |> 
+    d |> 
     dplyr::filter(.l_osl == "check" | .l_sl == "check" | .sl_osl == "check" | .kyn == "check" | .lif == "check") |> 
-    dplyr::select(lestnr, tegund, nr, lengd, oslaegt, slaegt, kynfaeri, lifur, .l_osl, .l_sl, .sl_osl, .kyn, .lif)
+    dplyr::select(lest, tegund, nr, lengd, oslaegt, slaegt, kynfaeri, lifur, .l_osl, .l_sl, .sl_osl, .kyn, .lif)
   table <- 
     d |> 
     DT::datatable(extensions = 'Scroller',
