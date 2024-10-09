@@ -110,15 +110,18 @@ sm_plot_boot <- function(d) {
 #'
 #' @param res list of munged hafvog's tables
 #' @param species Numerical, species to plot
+#' @param cruise Which cruise to plot
 #'
 #' @return A plot
 #' @export
 #'
-sm_plot_length_ungutted <- function(res, species = 1) {
+sm_plot_length_ungutted <- function(res, species = 1, cruise) {
   
   d <- 
     res$kv.this.year |> 
     dplyr::filter(tegund == species)
+  if(!missing(cruise)) d <- d |> dplyr::filter(leidangur %in% cruise)
+
   ggplot2::ggplot() +
     ggplot2::theme_grey(base_size = 16) +
     ggplot2::geom_ribbon(data = res$qc$lw |> 
@@ -149,15 +152,18 @@ sm_plot_length_ungutted <- function(res, species = 1) {
 #'
 #' @param res list of munged hafvog's tables
 #' @param species Numerical, species to plot
+#' @param cruise Which cruise to plot
 #'
 #' @return A plot
 #' @export
 #'
-sm_plot_length_gutted <- function(res, species = 1) {
+sm_plot_length_gutted <- function(res, species = 1, cruise) {
   
   d <- 
     res$kv.this.year |> 
     dplyr::filter(tegund == species)
+  if(!missing(cruise)) d <- d |> dplyr::filter(leidangur %in% cruise)
+  
   ggplot2::ggplot() +
     ggplot2::theme_grey(base_size = 16) +
     ggplot2::geom_ribbon(data = res$qc$lw |> 
@@ -190,15 +196,17 @@ sm_plot_length_gutted <- function(res, species = 1) {
 #'
 #' @param res list of munged hafvog's tables
 #' @param species Numerical, species to plot
+#' @param cruise Which cruise to plot
 #'
 #' @return A plot
 #' @export
 #'
-sm_plot_weights <- function(res, species = 1) {
+sm_plot_weights <- function(res, species = 1, cruise) {
   
   d <- 
     res$kv.this.year |> 
     dplyr::filter(tegund == species)
+  if(!missing(cruise)) d <- d |> dplyr::filter(leidangur %in% cruise)
   ggplot2::ggplot() +
     ggplot2::theme_grey(base_size = 16) +
     ggplot2::geom_rect(data = res$qc$range |> 
@@ -221,15 +229,17 @@ sm_plot_weights <- function(res, species = 1) {
 #'
 #' @param res list of munged hafvog's tables
 #' @param species Numerical, species to plot
+#' @param cruise Which cruise to plot
 #'
 #' @return A plot
 #' @export
 #'
-sm_plot_liver <- function(res, species = 1) {
+sm_plot_liver <- function(res, species = 1, cruise) {
   
   d <- 
     res$kv.this.year |> 
     dplyr::filter(tegund == species)
+  if(!missing(cruise)) d <- d |> dplyr::filter(leidangur %in% cruise)
   ggplot2::ggplot() +
     ggplot2::theme_grey(base_size = 16) +
     ggplot2::geom_rect(data = res$qc$range |> 
@@ -251,15 +261,17 @@ sm_plot_liver <- function(res, species = 1) {
 #'
 #' @param res list of munged hafvog's tables
 #' @param species Numerical, species to plot
+#' @param cruise Which cruise to plot
 #'
 #' @return A plot
 #' @export
 #'
-sm_plot_gonads <- function(res, species = 1) {
+sm_plot_gonads <- function(res, species = 1, cruise) {
   
   d <- 
     res$kv.this.year |> 
     dplyr::filter(tegund == species)
+  if(!missing(cruise)) d <- d |> dplyr::filter(leidangur %in% cruise)
   ggplot2::ggplot() +
     ggplot2::theme_grey(base_size = 16) +
     ggplot2::geom_rect(data = res$qc$range |> 

@@ -178,20 +178,15 @@ res |> sm_plot_gonads()
 
 ### QC table: Measurement limits
 
-```{r}
-res$kv.this.year |> 
-  dplyr::filter(leidangur %in% "TB2-2024") |> 
-  sm_table_kvarnir()
-```
 
 
 ### Prey table
 
 ```{r}
 res$pp |> 
-  dplyr::filter(leidangur %in% "TB2-2024",
+  dplyr::filter(leidangur %in% input$Leidangur,
                 astand %in% 1) |> 
-  sm_table_prey()
+  osmx::sm_table_prey()
 ```
 
 ### Prey histogram
@@ -230,7 +225,7 @@ top20.brad <-
   dplyr::pull(prey)
 
 pp |> 
-  #dplyr::filter(leidangur %in% input$Leidangur) |> 
+  dplyr::filter(leidangur %in% input$Leidangur) |> 
   dplyr::filter(prey %in% top20.brad) |> 
   ggplot2::ggplot() +
   ggplot2::geom_histogram(ggplot2::aes(m.thyngd)) +
@@ -251,7 +246,7 @@ tmp <-
                  wt = sum(heildarthyngd, na.rm = TRUE)) |>
   dplyr::mutate(magafylli = round(wt / oslaegt, 3)) 
 tmp |> 
-  sm_table_prey()
+  osmx::sm_table_prey()
 ```
 
 ### Pred-prey figures
@@ -263,6 +258,11 @@ tmp |>
   ggplot2::facet_wrap(~ fiskur, scales = "free")
 ```
 
+```{r}
+res$kv.this.year |> 
+  dplyr::filter(leidangur %in% "TB2-2024") |> 
+  sm_table_kvarnir()
+```
 
 
 

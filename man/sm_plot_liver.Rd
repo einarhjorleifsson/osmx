@@ -4,12 +4,14 @@
 \alias{sm_plot_liver}
 \title{Ratio of liver to ungutted as a function of length}
 \usage{
-sm_plot_liver(res, species = 1)
+sm_plot_liver(res, species = 1, cruise)
 }
 \arguments{
 \item{res}{list of munged hafvog's tables}
 
 \item{species}{Numerical, species to plot}
+
+\item{cruise}{Which cruise to plot}
 }
 \value{
 A plot
