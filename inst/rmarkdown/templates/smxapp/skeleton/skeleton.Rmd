@@ -6,189 +6,35 @@ runtime: shiny
 
 ```{r installations, eval = FALSE}
 # INSTALLATIONS - YOU ONLY NEED TO DO THIS ONCE (ONCE IN A WHILE) --------------
+# further info, see: https://heima.hafro.is/~einarhj/pkg/osmx
+
+# install.packages("devtools")
+# unlink(file.path(.libPaths(), '00LOCK-*'))
+remotes::install_github("einarhjorleifsson/ovog")
+remotes::install_github("einarhjorleifsson/osmx")
+
+# This guy you hopefully installed recently, takes a while
 remotes::install_local("R:/R/Pakkar/mardata", force = TRUE)
-remotes::install_github("fishvice/xe", dependencies = FALSE)
-remotes::install_github("tidyverse/dbplyr@v1.4.4", force = TRUE)
-# further info, see: https://heima.hafro.is/~einarhj/xe/
 ```
 
 ```{r get_data, eval = FALSE}
 # RUN THIS CHUNK line-by-line EACH TIME YOU HAVE GOTTEN NEW DATA IN HAFVOG
-library(ROracle)
-library(xe)
-# 2023-09-26: NEW
-#             Create the connection the database
-#             Old setup: dbname = "xe"      (Klara)
-#             New setup: dbname = "XEPDB1"  (Valur, Hlynur)
-con <- connect_oracle(dbname = "XEPDB1")
-# 2022-02-23:
-#            import_hafvog2 is a temporary function, because veidarfaeri is NA
-#            (some problem between different versions of hafvog - historical though
-#             should not be a problem for new data in 2022)
-# Specify the synaflokkur using the id and the gear using the gid. E.g.:
-#         id 
-# SMB     30
-# SMH     35
-res <- import_hafvog3(id = 30, con = con)
-# just a quick fix
-res$st <- 
-  res$st %>% 
-  dplyr::mutate(veidarfaeri = 73)
-# Here specify whatever cruise(s) you want to include.
-#  Make sure that these cruises are in your Hafvog, change accordingly
-xe::munge_for_smxapp(res, cruise = c("TB1-2024", "A3-2024"))
+cruises <- here::here(c("data-raw/TB2-2024.zip", 
+                        "data-raw/TTH1-2024.zip"))
+stillingar <- here::here("data-raw/stillingar_SMH_rall_(haust).zip")
+stodtoflur <- here::here("data-raw/stodtoflur.zip")
+res <- osmx::sm_munge(cruises, stillingar, stodtoflur)
+if(!dir.exists(here::here("data2"))) dir.create(here::here("data2"))
+res |> readr::write_rds(here::here("data2/res.rds"))
 ```
 
 
 ```{r smxapp}
-library(magrittr)
-load("data2/smb_dashboard.rda")
-
-pp <- 
-  readr::read_rds("data2/pp.rds") %>% 
-  dplyr::mutate(m.thyngd = round(thyngd/n, 2))
-pp2 <- 
-  pp %>% 
-  dplyr::group_by(leidangur, stod, pred, nr, astand) %>% 
-  dplyr::summarise(thyngd = sum(thyngd, na.rm = TRUE),
-                   n = sum(n, na.rm = TRUE),
-                   oslaegt = max(oslaegt, na.rm = TRUE),
-                   .groups = "drop") %>% 
-  dplyr::mutate(magafylli = round(thyngd / oslaegt * 100, 2))
-
-Tegund <- sort(unique(by.tegund.lengd.ar$tegund))
-# You may need next line if smb_dashboard.rda was generated in windose but
-#  currently running linux - this is normally only needed when setting up
-#  app on the MRI shiny-webserver
-#fisktegundir$heiti <- iconv(fisktegundir$heiti, from = "ISO-8859-1", to = "UTF-8")
-pp$prey <- iconv(pp$prey, from = "ISO-8859-1", to = "UTF-8")
-x <- 
-  fisktegundir %>% 
-  dplyr::filter(tegund %in% Tegund) %>% 
-  dplyr::mutate(val = paste(tegund, heiti)) %>% 
-  dplyr::select(tegund, val)
-my.species <- as.list(x$tegund)
-names(my.species) <- iconv(x$val, from = "ISO-8859-1", to = "UTF-8")
-x <- st %>% 
-  dplyr::filter(ar == now.year) %>% 
-  dplyr::select(leidangur) %>% 
-  dplyr::distinct()
-my.cruises <- as.list(x$leidangur)
-names(my.cruises) <- x$leidangur
-
-
-
-index.done.cruise <-
-  tibble::tibble(index = index.done) %>% 
-  dplyr::left_join(st %>% 
-                     dplyr::filter(ar == now.year) %>% 
-                     dplyr::select(leidangur, stod, index, togbyrjun))
-last.20 <-
-  st %>%  
-  dplyr::filter(ar == now.year) %>% 
-  dplyr::arrange(leidangur, desc(togbyrjun)) %>% 
-  dplyr::group_by(leidangur) %>% 
-  dplyr::slice(1:20) %>% 
-  dplyr::mutate(id = dplyr::n():1) %>% 
-  dplyr::ungroup() %>% 
-  dplyr::select(leidangur, id, index) %>% 
-  dplyr::left_join(st %>% 
-                     dplyr::select(index, ar, larett_opnun, lodrett_opnun,
-                                   botnhiti, yfirbordshiti, vir_uti)) %>%
-  tidyr::gather(variable, value, larett_opnun:vir_uti) %>% 
-  dplyr::filter(!is.na(value))
-st.dummy <-
-  st %>%  
-  dplyr::filter(index %in% index.done,
-                ar == now.year) %>% 
-  dplyr::select(leidangur, index) %>% 
-  dplyr::left_join(st %>% 
-                     dplyr::select(index, ar, larett_opnun, lodrett_opnun,
-                                   botnhiti, yfirbordshiti, vir_uti)) %>%
-  tidyr::gather(variable, value, larett_opnun:vir_uti) %>% 
-  dplyr::filter(!is.na(value))
-
-# skítamixið:
-maeliatridi <- readr::read_rds("data2/maeliatridi.rds")
-maeliatridi$heiti <- iconv(maeliatridi$heiti, 
-                           from = "ISO-8859-1",
-                           to = "UTF-8")
-skr <- 
-  readr::read_rds("data2/res.rds")$skraning %>% 
-  dplyr::group_by(synis_id, maeliadgerd) %>% 
-  dplyr::summarise(n = sum(fjoldi),
-                   .groups = "drop")
-MAELINGAR <- 
-  st %>% 
-  dplyr::filter(ar == now.year) %>% 
-  dplyr::select(synis_id,
-                leidangur,
-                time = togbyrjun) %>% 
-  dplyr::group_by(leidangur) %>% 
-  dplyr::mutate(start.time = min(time),
-                rel.time = as.numeric(time - start.time) / (60 * 60 * 24),
-                max.time = max(rel.time)) %>% 
-  dplyr::select(leidangur, rel.time, max.time, synis_id) %>% 
-  dplyr::ungroup() %>% 
-  dplyr::left_join(skr) %>% 
-  dplyr::arrange(rel.time) %>% 
-  tidyr::complete(rel.time, tidyr::nesting(leidangur, maeliadgerd), 
-                  fill = list(n = 0)) %>% 
-  dplyr::group_by(rel.time, leidangur) %>% 
-  tidyr::fill(max.time) %>% 
-  dplyr::filter(rel.time <= max.time) %>% 
-  dplyr::arrange(rel.time) %>% 
-  dplyr::left_join(maeliatridi) %>% 
-  dplyr::group_by(leidangur, heiti) %>% 
-  dplyr::mutate(n.cum = cumsum(n)) %>% 
-  dplyr::ungroup()
-
-
-res <- readr::read_rds("data2/res.rds")
-tegund <- res$other.stuff$fisktegundir
-tegund$heiti <- iconv(tegund$heiti, from = "ISO-8859-1", to = "UTF-8")
-
-species.first.year <- 
-  res$st %>% 
-  dplyr::left_join(res$nu) %>% 
-  dplyr::select(ar, reitur, tegund, fj_alls) %>% 
-  dplyr::filter(!tegund %in% c(160,180,182,184,191,197,201,237,303,304,344,403,731:739,799,904)) %>% 
-  dplyr::group_by(reitur, tegund) %>% 
-  dplyr::summarise(first.year = min(ar)) %>% 
-  dplyr::ungroup() %>% 
-  dplyr::mutate(lon = geo::r2d(reitur)$lon,
-                lat = geo::r2d(reitur)$lat)
-
-
-by.rect <- 
-  res$st %>% 
-  dplyr::left_join(res$nu) %>% 
-  dplyr::group_by(ar, reitur, tegund) %>% 
-  dplyr::summarise(n = mean(fj_alls, na.rm = TRUE)) %>% 
-  dplyr::filter(!is.na(tegund)) %>% 
-  dplyr::group_by(ar, tegund) %>% 
-  dplyr::mutate(n = ifelse(n > quantile(n, 0.975), quantile(n, 0.975), n)) %>% 
-  dplyr::ungroup() %>% 
-  dplyr::mutate(lon = geo::r2d(reitur)$lon,
-                lat = geo::r2d(reitur)$lat)
-
-scale_longitude_ices <- function(min = -44, max = 68.5, step = 1, ...) {
-  breaks <- seq(min + 0.5, max - 0.5, step)
-  labels <- geo::d2ir(60, breaks) %>% stringr::str_sub(3)
-  return(ggplot2::scale_x_continuous(name = NULL, breaks = breaks, labels = labels, ...))
-}
-scale_latitude_ices <- function(min = 36, max = 84.5, step = 0.5, ...) {
-  breaks <- seq(min + 0.25, max - 0.25, step)
-  labels <- geo::d2ir(breaks, 0) %>% stringr::str_sub(1, 2)
-  return(ggplot2::scale_y_continuous(name = NULL, breaks = breaks, labels = labels, ...))
-}
-
-# some addendums
-tows.done <- 
-  st.done.sf %>% dplyr::filter(year == now.year) %>% 
-  sf::st_coordinates() %>% 
-  tibble::as_tibble()
-
+res <- readr::read_rds(here::here("data2/res.rds"))
+my.species <- as.list(res$tegundir$tegund)
+names(my.species) <- res$tegundir$name
+my.cruises <- as.list(res$leidangrar)
+names(my.cruises) <- res$leidangrar
 ```
 
 Sidebar {.sidebar data-width=175}
@@ -212,11 +58,13 @@ checkboxGroupInput(inputId = "Leidangur", label = "Leidangur:",
 
 Síðast uppfært: 
 
-`r as.character(timi)`
+`r as.character(res$timi)`
 
 ATH: Val á leiðangri ekki virkt í öllum gluggum.
 
 Dót til prufu - um kóðann sem er á bak við má fræðast um nánar [hér](https://heima.hafro.is/~einarhj/older/gagnakvorn).
+
+
 
 Forsíða
 =====================================  
@@ -229,38 +77,24 @@ Column
 
 ```{r}
 renderPlot({
-  if(input$Type == "Numbers") 
+  if(input$Type == "Numbers")
   {
-    ggplot2::ggplot() +
-      ggplot2::theme_grey(base_size = 16) +
-      ggplot2::geom_ribbon(data = by.tegund.lengd.ar.m %>% 
-                             dplyr::filter(tegund == as.numeric(input$Species)),
-                           ggplot2::aes(lengd, ymax = n.std, ymin = 0), fill = "grey") +
-      ggplot2::geom_line(data = by.tegund.lengd.ar  %>% 
-                           dplyr::filter(tegund == as.numeric(input$Species),
-                                         ar >= 2010),
-                         ggplot2::aes(lengd, n.std)) +
-      ggplot2::facet_wrap(. ~ ar, dir = "v", ncol = 3) +
-      ggplot2::labs(x = NULL, y = "Fjöldi í hverju lengdarbili") +
-      ggplot2::scale_x_continuous(breaks = seq(10, 200, by = 20))
+    res$by.length |> 
+      dplyr::filter(tegund == as.numeric(input$Species),
+                    ar >= 2010) |> 
+      dplyr::filter(var == "n") |> 
+      osmx::sm_plot_lengths()
   } else {
-    ggplot2::ggplot() +
-      ggplot2::theme_grey(base_size = 16) +
-      ggplot2::geom_ribbon(data = by.tegund.lengd.ar.m %>% 
-                             dplyr::filter(tegund == as.numeric(input$Species)),
-                           ggplot2::aes(lengd, ymax = b.std, ymin = 0), fill = "grey") +
-      ggplot2::geom_line(data = by.tegund.lengd.ar  %>% 
-                           dplyr::filter(tegund == as.numeric(input$Species),
-                                         ar >= 2010),
-                         ggplot2::aes(lengd, b.std)) +
-      ggplot2::facet_wrap(. ~ ar, dir = "v", ncol = 3) +
-      ggplot2::labs(x = NULL, y = "Þyngd [kg] í hverju lengdarbili") +
-      ggplot2::scale_x_continuous(breaks = seq(10, 200, by = 20))
-  } 
-  
+    res$by.length |> 
+      dplyr::filter(tegund == as.numeric(input$Species),
+                    ar >= 2010) |> 
+      dplyr::filter(var == "b") |> 
+      osmx::sm_plot_lengths()
+  }
 })
 
 ```
+
 
 
 Column 
@@ -273,78 +107,46 @@ Column
 renderPlot({
   if(input$Type == "Numbers") 
   {
-    by.station.boot %>% 
-      dplyr::filter(tegund == as.numeric(input$Species),
-                    variable == "n") %>% 
-      ggplot2::ggplot(ggplot2::aes(ar, n.std)) +
-      ggplot2::theme_grey(base_size = 16) +
-      ggplot2::geom_pointrange(ggplot2::aes(ar, mean, ymin = lower.ci, ymax = upper.ci)) +
-      ggplot2::scale_x_continuous(breaks = seq(1985, 2025, by = 5)) +
-      ggplot2::expand_limits(y = 0) +
-      ggplot2::labs(x = NULL, y = NULL)
+    res$boot |> 
+      dplyr::filter(tegund == input$Species,
+                    var == "n") |> 
+      osmx::sm_plot_boot()
   } else {
-    by.station.boot %>% 
-      dplyr::filter(tegund == as.numeric(input$Species),
-                    variable == "b") %>% 
-      ggplot2::ggplot(ggplot2::aes(ar, b.std)) +
-      ggplot2::theme_grey(base_size = 16) +
-      ggplot2::geom_pointrange(ggplot2::aes(ar, mean, ymin = lower.ci, ymax = upper.ci)) +
-      ggplot2::scale_x_continuous(breaks = seq(1985, 2025, by = 5)) +
-      ggplot2::expand_limits(y = 0) +
-      ggplot2::labs(x = NULL, y = NULL)
+    res$boot |> 
+      dplyr::filter(tegund == input$Species,
+                    var == "b") |> 
+      osmx::sm_plot_boot()
   }
 })
 
 ```
 
-### Afli í staðaltogi árið `r now.year`
+
+
+### Afli í staðaltogi árið `r 2024`
 
 ```{r}
-leaflet::renderLeaflet({
+renderPlot({
   
-  x0 <- 
-    by.station %>% 
-    dplyr::filter(ar == now.year) %>% 
-    dplyr::select(lon, lat) %>% 
-    dplyr::distinct()
+  tmp <- 
+    res$by.station |> 
+    dplyr::filter(tegund == input$Species,
+                  ar == max(ar))
+  
   if(input$Type == "Numbers") {
-    x <- 
-      by.station %>% 
-      dplyr::filter(ar == now.year,
-                    tegund == as.numeric(input$Species),
-                    n.std > 0) %>% 
-      dplyr::select(lon, lat, n.std) %>% 
-      dplyr::arrange(-n.std) |> 
-      dplyr::mutate(n.std = floor(n.std))
-    skali <- sqrt(max(x$n.std))
-    leaflet::leaflet(x) %>% 
-      leaflet::addTiles() %>% 
-      leaflet::addCircles(data = x0, weight = 0.5, color = "white") %>% 
-      leaflet::addCircles(weight = 1,
-                          label = ~paste(n.std, "stykki"),
-                          radius = ~sqrt(n.std)/skali * 5e4,
-                          color = "red")
+    tmp |> 
+      dplyr::filter(var == "n") |> 
+      osmx::sm_plot_bubble()
   } else {
-    x <- 
-      by.station %>% 
-      dplyr::filter(ar == now.year,
-                    b.std > 0,
-                    tegund == as.numeric(input$Species)) %>% 
-      dplyr::select(lon, lat, b.std) %>% 
-      dplyr::arrange(-b.std) |> 
-      dplyr::mutate(b.std = floor(b.std))
-    skali <- sqrt(max(x$b.std))
-    leaflet::leaflet(x) %>% 
-      leaflet::addTiles() %>%
-      leaflet::addCircles(data = x0, weight = 0.5, color = "white") %>% 
-      leaflet::addCircles(weight = 1,
-                          label = ~paste(round(b.std), "kg"),
-                          radius = ~sqrt(b.std)/skali * 5e4,
-                          color = "red")
+    tmp |> 
+      dplyr::filter(var == "b") |> 
+      osmx::sm_plot_bubble()
   }
 })
 
 ```
+
+
 
 Dreifing
 =====================================
@@ -356,77 +158,475 @@ Column {.tabset}
 
 ```{r}
 renderPlot({
+  
+  tmp <- 
+    res$by.station |> 
+    dplyr::filter(tegund == input$Species,
+                  ar %in% c(seq(2000, 2015, by = 5),
+                            2017:2024))
+  
   if(input$Type == "Numbers") {
-    by.station %>% 
-      dplyr::filter(ar %in% c(1985, 1990, 1995, 2000, seq(2005, 2015, by = 2), now.year-1, now.year),
-                    tegund == as.numeric(input$Species)) %>% 
-      ggplot2::ggplot() +
-      ggplot2::theme_grey(base_size = 16) +
-      ggplot2::geom_path(data = geo::island, ggplot2::aes(lon, lat)) +
-      ggplot2::geom_point(ggplot2::aes(lon, lat, size = n.std),
-                          alpha = 0.25, colour = "red") +
-      ggplot2::scale_size_area(max_size = 30) +
-      ggplot2::coord_quickmap(xlim = range(by.station$lon, na.rm = TRUE),
-                              ylim = range(by.station$lat, na.rm = TRUE)) +
-      #ggplot2::theme(legend.position = c(0.5, 0.6)) +
-      ggplot2::labs(x = NULL, y = NULL, size = "Stykki") +
-      ggplot2::facet_wrap(~ ar, nrow = 3)
+    tmp |> 
+      dplyr::filter(var == "n") |> 
+      osmx::sm_plot_bubble()
   } else {
-    by.station %>% 
-      dplyr::filter(ar %in% c(1985, 1990, 1995, 2000, seq(2005, 2015, by = 2), now.year - 1, now.year),
-                    tegund == as.numeric(input$Species)) %>% 
-      ggplot2::ggplot() +
-      ggplot2::theme_grey(base_size = 16) +
-      ggplot2::geom_path(data = geo::island, ggplot2::aes(lon, lat)) +
-      ggplot2::geom_point(ggplot2::aes(lon, lat, size = b.std),
-                          alpha = 0.25, colour = "red") +
-      ggplot2::scale_size_area(max_size = 30) +
-      ggplot2::coord_quickmap(xlim = range(by.station$lon, na.rm = TRUE),
-                              ylim = range(by.station$lat, na.rm = TRUE)) +
-      #ggplot2::theme(legend.position = c(0.5, 0.6)) +
-      ggplot2::labs(x = NULL, y = NULL, size = "kg") +
-      ggplot2::facet_wrap(~ ar, nrow = 3)
+    tmp |> 
+      dplyr::filter(var == "b") |> 
+      osmx::sm_plot_bubble()
   }
+})
+```
+
+
+### Tegund - Magn í reit
+
+```{r}
+renderPlot({
+  if(input$Type == "Numbers") {
+    res$by.rect |> 
+      dplyr::filter(tegund == input$Species,
+                    var == "n") |> 
+      osmx::sm_plot_glyph()
+  } else {
+    res$by.rect |> 
+      dplyr::filter(tegund == input$Species,
+                    var == "b") |> 
+      osmx::sm_plot_glyph()
+  }
+})
+```
+
+
+
+
+### Tegund - Líkur á veiði í reit
+
+```{r}
+renderPlot({
+  tmp <- 
+    res$by.station |> 
+    dplyr::filter(ar == max(ar), tegund == input$Species, var == "n") |> 
+    dplyr::mutate(val = ifelse(val == 0, "absent", "present")) |> 
+    dplyr::select(lon, lat, val)
+  res$p_capture |> 
+    dplyr::filter(tegund == input$Species) |> 
+    osmx::sm_plot_probability() +
+    ggplot2::geom_point(data = tmp, 
+                        ggplot2::aes(lon, lat, colour = val),
+                        size = 0.5) +
+    ggplot2::scale_colour_manual(values = c("present" = "cyan", "absent" = "white"),
+                                 guide = "none")
+})
+```
+
+
+
+Vikmörk-myndir
+=====================================
+
+
+Column {.tabset}
+-------------------------------------
+
+### Lengd-óslægt
+
+```{r}
+renderPlot({
+  res |> osmx::sm_plot_length_ungutted(input$Species, input$Leidangur)
 })
 
 ```
 
-### Tegund - fjöldi í reit
+### Lengd-slægt
+
+```{r}
+renderPlot({
+  res |> osmx::sm_plot_length_gutted(input$Species, input$Leidangur)
+})
+
+```
+
+### Lengd-slægt/óslægt
+
+```{r}
+renderPlot({
+  res |>  osmx::sm_plot_weights(input$Species, input$Leidangur)
+})
+```
+
+### Lengd-lifur/óslaegt
+
+```{r}
+renderPlot({
+  res |> osmx::sm_plot_liver(input$Species, input$Leidangur)
+})
+
+```
+
+### Lengd-kynkirtlar/óslaegt
+
+```{r}
+renderPlot({
+  res |> osmx::sm_plot_gonads(input$Species, input$Leidangur)
+})
+```
+
+
+
+Vikmörk-tafla
+=====================================
+
+Column {.tabset}
+-------------------------------------
+
+### Lengdir - allar tegundir
+
+```{r}
+DT::renderDataTable({
+  
+})
+```
+
+### Kvarnir - allar tegundir
+
+```{r}
+DT::renderDataTable({
+  res$kv.this.year |> 
+    dplyr::filter(leidangur %in% input$Leidangur) |> 
+    osmx::sm_table_kvarnir()
+})
+```
+
+### Tegund - fyrsta skipti í reit
+
+```{r}
+DT::renderDataTable({
+  
+})
+```
+
+
+Magar
+=====================================
+
+Column {.tabset}
+-------------------------------------
+
+### Mælingar á bráð
+
+```{r}
+DT::renderDataTable({
+  res$pp |> 
+    dplyr::filter(leidangur %in% input$Leidangur,
+                  astand %in% 1) |> 
+    osmx::sm_table_prey()
+})
+```
+
+### Þyngdardreifing á bráð - Topp 20 bráðir
+
+```{r}
+renderPlot({
+  pp <- 
+    res$pp |> 
+    #dplyr::filter(leidangur %in% input$Leidangur) |> 
+    dplyr::filter(astand == 1,
+                  # brað verdur ad vera skilgreind
+                  !is.na(prey),
+                  # verður að hafa mælingu thyngd
+                  !is.na(heildarthyngd),
+                  # verður að hafa mælingu talid
+                  !is.na(n)) |> 
+    dplyr::mutate(m.thyngd = round(heildarthyngd / n, 2))
+  
+  # not really mean based on individual prey measurements
+  pp.mean <- 
+    pp |> 
+    dplyr::group_by(prey) |> 
+    dplyr::summarise(fjoldi = sum(n),
+                     mean = sum(heildarthyngd) / sum(n)) |> 
+    dplyr::ungroup() |> 
+    dplyr::arrange(-fjoldi)
+  
+  # top 20 (bráð) tegundir "mældar"
+  top20 <-
+    pp.mean |> 
+    dplyr::slice(1:20)
+  top20.brad <-
+    top20 |> 
+    dplyr::pull(prey)
+  
+  pp |> 
+    dplyr::filter(leidangur %in% input$Leidangur) |> 
+    dplyr::filter(prey %in% top20.brad) |> 
+    ggplot2::ggplot() +
+    ggplot2::geom_histogram(ggplot2::aes(m.thyngd)) +
+    ggplot2::geom_vline(data = top20, 
+                        ggplot2::aes(xintercept = mean), colour = "red") +
+    ggplot2::facet_wrap(~ prey, scale = "free") +
+    ggplot2::labs(x = "Meðalþyngd", y = "Fjöldi")
+})
+```
+
+
+### Samantekt per fisk
+
+```{r}
+DT::renderDataTable({
+  tmp <- 
+    res$pp |> 
+    dplyr::filter(leidangur %in% input$Leidangur) |> 
+    dplyr::group_by(leidangur, stod, fiskur, fnr, flengd, oslaegt, astand ) |> 
+    dplyr::reframe(n = sum(n, na.rm = TRUE),
+                   wt = sum(heildarthyngd, na.rm = TRUE)) |>
+    dplyr::mutate(magafylli = round(wt / oslaegt, 3)) 
+  tmp |> 
+    osmx::sm_table_prey()
+})
+```
+
+### Dreifing á magafylli eftir tegundum
+
+```{r}
+renderPlot({
+  tmp <- 
+    res$pp |> 
+    dplyr::filter(leidangur %in% input$Leidangur) |> 
+    dplyr::group_by(leidangur, stod, fiskur, fnr, flengd, oslaegt, astand ) |> 
+    dplyr::reframe(n = sum(n, na.rm = TRUE),
+                   wt = sum(heildarthyngd, na.rm = TRUE)) |>
+    dplyr::mutate(magafylli = round(wt / oslaegt, 3)) 
+  tmp |> 
+    ggplot2::ggplot() +
+    ggplot2::geom_histogram(ggplot2::aes(magafylli)) +
+    ggplot2::facet_wrap(~ fiskur, scales = "free")
+})
+```
+
+
+
+
+Togupplýsingar
+=====================================
+
+Column {.tabset}
+-------------------------------------
+
+### Lögun - síðustu 20 stöðvar
+
+```{r}
+renderPlot({
+  res$timetrend.20 |> 
+    dplyr::filter(leidangur %in% input$Leidangur,
+           var %in% c("larett_opnun", "lodrett_opnun", "vir_uti")) |> 
+    osmx::sm_plot_last20()
+})
+```
+
+### Umhverfi - síðustu 20 stöðvar
+
+```{r}
+renderPlot({
+  res$timetrend.20 |> 
+    dplyr::filter(leidangur %in% input$Leidangur,
+           var %in% c("botnhiti", "yfirbordshiti")) |> 
+    osmx::sm_plot_last20()
+})
+```
+
+### Tímatrend - lögun
+
+```{r}
+renderPlot({
+  res$timetrend |> 
+    dplyr::filter(leidangur %in% input$Leidangur,
+           var %in% c("larett_opnun", "lodrett_opnun", "vir_uti")) |> 
+    osmx::sm_plot_violin()
+  
+})
+```
+
+### Tímatrend - umhverfi
+
+```{r}
+renderPlot({
+  res$timetrend |> 
+    dplyr::filter(leidangur %in% input$Leidangur,
+           var %in% c("botnhiti", "yfirbordshiti")) |> 
+    osmx::sm_plot_violin()
+  
+})
+```
+
+
+```{r}
+knitr::opts_chunk$set(eval = FALSE)
+```
+
+
+Surf and turf
+=====================================
+
+Column {.tabset}
+-------------------------------------
+
+### Togfar
 
 ```{r}
 
-renderPlot({
-  n.glyph <- 
-    by.rect %>% 
-    dplyr::filter(tegund == input$Species) %>% 
-    GGally::glyphs(x_major = "lon", 
-                   y_major = "lat",
-                   x_minor = "ar", 
-                   y_minor = "n", 
-                   width = 1, 
-                   height = 0.5)
-  
-  n.glyph %>% 
-    dplyr::mutate(years = ifelse(ar < now.year, "history", "current"),
-                  pos = ifelse(n != 0, TRUE, FALSE),
-                  base = lat - 0.25,
-                  gy = ifelse(n == 0, gy + 0.005, gy)) %>% 
-    ggplot2::ggplot() +
-    ggplot2::theme_bw() +
-    ggplot2::geom_linerange(ggplot2::aes(x = gx, ymin = base, ymax = gy,
-                                         colour = years)) +
-    #ggplot2::geom_(data = st.done.sp %>% sf::st_as_sf() %>% dplyr::filter(ar == 2021)) +
-    ggplot2::geom_path(data = geo::island, ggplot2::aes(lon, lat)) +
-    ggplot2::coord_quickmap() +
-    scale_longitude_ices() +
-    scale_latitude_ices() +
-    ggplot2::scale_colour_manual(values = c("history" = "#377EB8", "current" = "#E41A1C")) +
-    ggplot2::theme(panel.grid.major = ggplot2::element_blank(),
-                   panel.grid.minor = ggplot2::element_line(size = 1),
-                   axis.ticks = ggplot2::element_blank(),
-                   legend.position = "none")
+leaflet::renderLeaflet({
+  p <-
+    leaflet::leaflet(stadlar.rallstodvar.sp) %>% 
+    leaflet::addTiles() %>% 
+    leaflet::addPolylines(color = "red", weight = 10)
+  years <- as.character(now.year:(now.year - 3))
+  for(i in 1:length(years)) {
+    
+    if(i == 1) {
+      p <-
+        p %>% 
+        leaflet::addPolylines(data = st.done.sf[st.done.sf$year == years[i],],
+                              group = years[i],
+                              label = ~htmltools::htmlEscape(as.character(index)))
+    } else {
+      p <-
+        p %>% 
+        leaflet::addPolylines(data = st.done.sf[st.done.sf$year == years[i],],
+                              group = years[i])
+    }
+  }
+  p %>% 
+    leaflet::addLayersControl(overlayGroups = years,
+                              options = leaflet::layersControlOptions(collapsed = FALSE))
 })
+
 ```
 
 
 
+Af aflabrögðum
+=====================================
+
+Column {.tabset}
+-------------------------------------
+
+### Afli
+
+```{r}
+DT::renderDataTable({
+  x <- 
+    by.station %>% 
+    dplyr::filter(ar == now.year) %>% 
+    dplyr::left_join(st %>% 
+                       dplyr::filter(ar == now.year) %>% 
+                       dplyr::select(index, leidangur)) %>% 
+    dplyr::group_by(leidangur, tegund) %>% 
+    dplyr::summarise(n = round(sum(n.std), 0),
+                     b = round(sum(b.std), 0)) %>% 
+    dplyr::filter(n > 0) %>% 
+    tidyr::gather(variable, value, n:b) %>% 
+    dplyr::mutate(variable = paste0(variable, ".", leidangur)) %>% 
+    dplyr::ungroup() %>% 
+    dplyr::select(-leidangur) %>% 
+    tidyr::spread(variable, value) %>%
+    dplyr::left_join(fisktegundir) %>% 
+    dplyr::mutate(tegund = paste(tegund, heiti)) %>% 
+    dplyr::select(-heiti)
+  if(input$Type == "Numbers") {
+    x %>% 
+      dplyr::select(tegund, starts_with("n.")) %>% 
+      DT::datatable(extensions = 'Scroller',
+                    rownames = FALSE,
+                    options = list(deferRender = TRUE,
+                                   scrollY = 700,
+                                   scroller = TRUE
+                    ))
+  } else {
+    x %>% 
+      dplyr::select(tegund, starts_with("b.")) %>% 
+      DT::datatable(extensions = 'Scroller',
+                    rownames = FALSE,
+                    options = list(deferRender = TRUE,
+                                   scrollY = 700,
+                                   scroller = TRUE
+                    ))
+  }
+  
+})
+
+```
+
+### Mælingar 1
+
+```{r}
+
+
+```
+
+### Mælingar 2
+
+```{r}
+renderPlot({
+  
+  MAELINGAR %>% 
+    ggplot2::ggplot(ggplot2::aes(rel.time, n.cum, colour = leidangur)) +
+    ggplot2::theme_grey(base_size = 16) +
+    ggplot2::geom_step(lwd = 1) +
+    ggplot2::facet_wrap(~ heiti, scale = "free_y") +
+    ggplot2::expand_limits(y = 0) +
+    ggplot2::labs(x = "Dagar frá fyrstu stöð",
+                  y = "Fjöldi",
+                  colour = "Leiðangur") +
+    ggplot2::scale_color_brewer(palette = "Set1")
+})
+```
+
+### Mælingar eftir tegundum
+
+```{r}
+renderPlot({
+  
+  skr <- 
+    readr::read_rds("data2/res.rds")$skraning %>% 
+    dplyr::filter(tegund == input$Species) %>% 
+    dplyr::group_by(synis_id, maeliadgerd) %>% 
+    dplyr::summarise(n = sum(fjoldi)) %>% 
+    dplyr::ungroup()
+  st2 <- 
+    st %>% 
+    dplyr::filter(ar == now.year) %>% 
+    dplyr::select(synis_id,
+                  leidangur,
+                  time = togbyrjun) %>% 
+    dplyr::group_by(leidangur) %>% 
+    dplyr::mutate(start.time = min(time),
+                  rel.time = as.numeric(time - start.time) / (60 * 60 * 24),
+                  max.time = max(rel.time)) %>% 
+    dplyr::select(leidangur, rel.time, max.time, synis_id) %>% 
+    dplyr::ungroup() %>% 
+    dplyr::left_join(skr) %>% 
+    dplyr::arrange(rel.time) %>% 
+    tidyr::complete(rel.time, tidyr::nesting(leidangur, maeliadgerd), 
+                    fill = list(n = 0)) %>% 
+    dplyr::group_by(rel.time, leidangur) %>% 
+    tidyr::fill(max.time) %>% 
+    dplyr::filter(rel.time <= max.time) %>% 
+    dplyr::arrange(rel.time) %>% 
+    dplyr::left_join(maeliatridi) %>% 
+    dplyr::group_by(leidangur, heiti) %>% 
+    dplyr::mutate(n.cum = cumsum(n)) %>% 
+    dplyr::ungroup()
+  
+  
+  st2 %>% 
+    ggplot2::ggplot(ggplot2::aes(rel.time, n.cum, colour = leidangur)) +
+    ggplot2::geom_step(lwd = 1) +
+    ggplot2::theme_grey(base_size = 16) +
+    ggplot2::facet_wrap(~ heiti, scale = "free_y") +
+    ggplot2::expand_limits(y = 0) +
+    ggplot2::labs(x = "Dagar frá fyrstu stöð",
+                  y = "Fjöldi",
+                  colour = "Leiðangur") +
+    ggplot2::scale_color_brewer(palette = "Set1")
+})
+```
