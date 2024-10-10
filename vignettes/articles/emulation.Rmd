@@ -25,7 +25,7 @@ library(osmx)
 One can read in the data currently being collected using the `hv_import_cruise` that resides in the {ovog}-package:
 
 ```{r}
-cruises <- c("~/R/Pakkar2/osmx/data-raw/SMH/TB2-2024.zip", "~/R/Pakkar2/osmx/data-raw/SMH/TTH1-2024.zip")
+cruises <- here::here(c("data-raw/TB2-2024.zip", "data-raw/TTH1-2024.zip"))
 measurement <- 
   ovog::hv_import_cruise(cruises) |> 
   ovog::hv_create_tables()
@@ -69,9 +69,9 @@ measurement$lengdir |>
 Normally we would ...
 
 ```{r}
-cruises <- c("~/R/Pakkar2/osmx/data-raw/SMH/TB2-2024.zip", "~/R/Pakkar2/osmx/data-raw/SMH/TTH1-2024.zip")
-stillingar <- c("~/R/Pakkar2/osmx/data-raw/SMH/stillingar_SMH_rall_(haust).zip")
-stodtoflur <- c("~/R/Pakkar2/osmx/data-raw/SMH/stodtoflur.zip")
+cruises <- here::here(c("data-raw/TB2-2024.zip", "data-raw/TTH1-2024.zip"))
+stillingar <- here::here("data-raw/stillingar_SMH_rall_(haust).zip")
+stodtoflur <- here::here("data-raw/stodtoflur.zip")
 res <- sm_munge(cruises, stillingar, stodtoflur)
 ```
 
@@ -184,8 +184,7 @@ res |> sm_plot_gonads()
 
 ```{r}
 res$pp |> 
-  dplyr::filter(leidangur %in% input$Leidangur,
-                astand %in% 1) |> 
+  dplyr::filter(astand %in% 1) |> 
   osmx::sm_table_prey()
 ```
 
@@ -197,7 +196,6 @@ res$pp |>
 # applly some filter
 pp <- 
   res$pp |> 
-  #dplyr::filter(leidangur %in% input$Leidangur) |> 
   dplyr::filter(astand == 1,
                 # brað verdur ad vera skilgreind
                 !is.na(prey),
@@ -225,7 +223,6 @@ top20.brad <-
   dplyr::pull(prey)
 
 pp |> 
-  dplyr::filter(leidangur %in% input$Leidangur) |> 
   dplyr::filter(prey %in% top20.brad) |> 
   ggplot2::ggplot() +
   ggplot2::geom_histogram(ggplot2::aes(m.thyngd)) +

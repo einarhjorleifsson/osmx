@@ -52,3 +52,31 @@ In previous workflow the data contemporaneously collected were accessed directly
 
 The xe-package will still be around as is, but will no longer be maintained.
 
+## Setting up a project
+
+It is recommended that you setup your contemporaneous survey as an RStudio project. The steps within RStudio are:
+
+* File -> New Project ... -> New Directory
+* Suggest you setp a directory "data-raw"
+    * In this directory put your dumped hafvog zip files, including "stodtoflur.zip" and "stillingar...zip"
+* If you have not installed the packages as instructed above, do so now
+* Once done open up the smxapp skeleton (you may have to restart your project) by:
+    * File -> New File -> R Markdown ... -> From Template -> smxapp {osmx}
+    * Save the file in the root of the project, e.g. SMH2024.Rmd
+* Run the through the first two chunks of code, line by line. Check carefully messages.
+* Press "Run Document" to start the shiny
+
+The structure of your project should in the end look something like this:
+
+```
+├── SMH2024.Rmd
+├── data-raw
+│   ├── TB2-2024.zip
+│   ├── TTH1-2024.zip
+│   ├── stillingar_SMH_rall_(haust).zip
+│   └── stodtoflur.zip
+├── data2
+│   └── res.rds
+└── SMH2024.Rproj
+```
+

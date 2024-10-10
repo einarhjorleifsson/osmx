@@ -19,15 +19,17 @@ remotes::install_local("R:/R/Pakkar/mardata", force = TRUE)
 
 ```{r get_data, eval = FALSE}
 # RUN THIS CHUNK line-by-line EACH TIME YOU HAVE GOTTEN NEW DATA IN HAFVOG
-cruises <- here::here(c("data-raw/TB2-2024.zip", 
-                        "data-raw/TTH1-2024.zip"))
-stillingar <- here::here("data-raw/stillingar_SMH_rall_(haust).zip")
-stodtoflur <- here::here("data-raw/stodtoflur.zip")
+#  The paths to the zip-files (you may need to change this):
+cruises <- c("data-raw/TB2-2024.zip", "data-raw/TTH1-2024.zip")
+stillingar <- "data-raw/stillingar_SMH_rall_(haust).zip"
+stodtoflur <- "data-raw/stodtoflur.zip"
+
 res <- osmx::sm_munge(cruises, stillingar, stodtoflur)
 if(!dir.exists(here::here("data2"))) dir.create(here::here("data2"))
 res |> readr::write_rds(here::here("data2/res.rds"))
 ```
 
+<!-- DO NOT FIDDLE WITH STUFF BELOW, JUST PRESS "Run Document" -->
 
 ```{r smxapp}
 res <- readr::read_rds(here::here("data2/res.rds"))
@@ -213,7 +215,7 @@ renderPlot({
     osmx::sm_plot_probability() +
     ggplot2::geom_point(data = tmp, 
                         ggplot2::aes(lon, lat, colour = val),
-                        size = 0.5) +
+                        size = 2) +
     ggplot2::scale_colour_manual(values = c("present" = "cyan", "absent" = "white"),
                                  guide = "none")
 })

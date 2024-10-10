@@ -1,6 +1,6 @@
 Package: osmx
 Title: Visualize survey data
-Version: 2024-10-09
+Version: 2024-10-10
 Authors@R: 
     person("Einar", "Hjorleifsson", , "einar.hjorleifsson@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "YOUR-ORCID-ID"))
