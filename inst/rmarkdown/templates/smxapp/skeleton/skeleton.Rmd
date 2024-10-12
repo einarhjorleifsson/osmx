@@ -34,7 +34,7 @@ res |> readr::write_rds(here::here("data2/res.rds"))
 ```{r smxapp}
 res <- readr::read_rds(here::here("data2/res.rds"))
 my.species <- as.list(res$tegundir$tegund)
-names(my.species) <- res$tegundir$name
+names(my.species) <- paste0(res$tegundir$name, " - ", res$tegundir$tegund)
 my.cruises <- as.list(res$leidangrar)
 names(my.cruises) <- res$leidangrar
 ```

@@ -7,3 +7,4 @@ update_web.R
 *.zip
 garbage
 inst/doc
+data2
