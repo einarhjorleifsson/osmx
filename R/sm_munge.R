@@ -362,12 +362,52 @@ sm_munge <- function(maelingar, stillingar, stodtoflur, current.year = lubridate
                   dplyr::everything()) |> 
     dplyr::arrange(leidangur, stod, tegund, nr)
   
-  # THE BOOT ------------------------------------------------------------------
-  res <- 
-    res |> 
-    sm_boot()
+  # Surf-and-turf --------------------------------------------------------------
+  coloured_print("Togfar", colour = "green")
+  tmp <- 
+    res$stodvar |> 
+    dplyr::select(ar, leidangur, stod, reitur, tognumer, veidarfaeri, togtimi, toghradi, toglengd, 
+                  lodrett_opnun, larett_opnun, vir_uti, yfirbordshiti, botnhiti,
+                  kastad_lengd, kastad_breidd, hift_lengd, hift_breidd) |> 
+    dplyr::mutate(.id = 1:dplyr::n()) |> 
+    # one station gets dropped
+    tidyr::drop_na(kastad_lengd, kastad_breidd, hift_lengd, hift_breidd)
+  
+  
+  stations_sf <- 
+    dplyr::bind_rows(
+      tmp |> 
+        dplyr::select(.id, kastad_lengd, kastad_breidd) |> 
+        sf::st_as_sf(coords = c("kastad_lengd", "kastad_breidd"),
+                     crs = 4326),
+      tmp |> 
+        dplyr::select(.id, hift_lengd, hift_breidd) |> 
+        sf::st_as_sf(coords = c("hift_lengd", "hift_breidd"),
+                     crs = 4326)
+    ) |> 
+    dplyr::group_by(.id) |> 
+    dplyr::summarise(do_union = FALSE) |> 
+    sf::st_cast("LINESTRING") |> 
+    dplyr::ungroup()
+  
+  sf_this_year <-
+    tmp |> 
+    dplyr::filter(ar == max(ar)) |> 
+    dplyr::left_join(stations_sf,
+                     by = dplyr::join_by(.id)) |> 
+    sf::st_as_sf() |> 
+    dplyr::select(-.id)
+  sf_older <- 
+    tmp |> 
+    dplyr::filter(ar < max(ar)) |> 
+    dplyr::select(.id, ar) |>
+    dplyr::left_join(stations_sf,
+                     by = dplyr::join_by(.id)) |> 
+    sf::st_as_sf()
+  res$sf <- list(sf_older = sf_older, sf_this_year = sf_this_year)
   
   # ----------------------------------------------------------------------------
+  coloured_print("Valblod", colour = "green")
   res$leidangrar <- 
     res$stodvar |> 
     dplyr::filter(ar == max(ar)) |> 
@@ -383,8 +423,14 @@ sm_munge <- function(maelingar, stillingar, stodtoflur, current.year = lubridate
                                      name),
                      by = dplyr::join_by(tegund))
   res$timi <- lubridate::now()
-
   
+  
+  
+  # THE BOOT ------------------------------------------------------------------
+  res <- 
+    res |> 
+    sm_boot()
+
   coloured_print("\nHURRA!", "green")
   return(res)
   

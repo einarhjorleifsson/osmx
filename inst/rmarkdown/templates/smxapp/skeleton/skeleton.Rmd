@@ -34,7 +34,9 @@ res |> readr::write_rds(here::here("data2/res.rds"))
 ```{r smxapp}
 res <- readr::read_rds(here::here("data2/res.rds"))
 my.species <- as.list(res$tegundir$tegund)
-names(my.species) <- paste0(res$tegundir$name, " - ", res$tegundir$tegund)
+names(my.species) <- paste0(stringr::str_pad(res$tegundir$tegund, width = 3, pad = "0"),
+                            "-",
+                            res$tegundir$name)
 my.cruises <- as.list(res$leidangrar)
 names(my.cruises) <- res$leidangrar
 ```
@@ -48,8 +50,6 @@ selectInput(inputId = "Species", label = "Tegund:",
 
 
 radioButtons(inputId = "Type", label = "Val:", 
-             #choicesNames = list("Fjöldi", "Þyngd"),
-             #choicesValues = list("Numbers", "Weight"),
              choices = list("Numbers", "Weight"),
              selected = list("Numbers"))
 
@@ -420,7 +420,7 @@ Column {.tabset}
 renderPlot({
   res$timetrend.20 |> 
     dplyr::filter(leidangur %in% input$Leidangur,
-           var %in% c("larett_opnun", "lodrett_opnun", "vir_uti")) |> 
+                  var %in% c("larett_opnun", "lodrett_opnun", "vir_uti")) |> 
     osmx::sm_plot_last20()
 })
 ```
@@ -431,7 +431,7 @@ renderPlot({
 renderPlot({
   res$timetrend.20 |> 
     dplyr::filter(leidangur %in% input$Leidangur,
-           var %in% c("botnhiti", "yfirbordshiti")) |> 
+                  var %in% c("botnhiti", "yfirbordshiti")) |> 
     osmx::sm_plot_last20()
 })
 ```
@@ -442,7 +442,7 @@ renderPlot({
 renderPlot({
   res$timetrend |> 
     dplyr::filter(leidangur %in% input$Leidangur,
-           var %in% c("larett_opnun", "lodrett_opnun", "vir_uti")) |> 
+                  var %in% c("larett_opnun", "lodrett_opnun", "vir_uti")) |> 
     osmx::sm_plot_violin()
   
 })
@@ -454,15 +454,10 @@ renderPlot({
 renderPlot({
   res$timetrend |> 
     dplyr::filter(leidangur %in% input$Leidangur,
-           var %in% c("botnhiti", "yfirbordshiti")) |> 
+                  var %in% c("botnhiti", "yfirbordshiti")) |> 
     osmx::sm_plot_violin()
   
 })
-```
-
-
-```{r}
-knitr::opts_chunk$set(eval = FALSE)
 ```
 
 
@@ -475,35 +470,24 @@ Column {.tabset}
 ### Togfar
 
 ```{r}
-
 leaflet::renderLeaflet({
-  p <-
-    leaflet::leaflet(stadlar.rallstodvar.sp) %>% 
-    leaflet::addTiles() %>% 
-    leaflet::addPolylines(color = "red", weight = 10)
-  years <- as.character(now.year:(now.year - 3))
-  for(i in 1:length(years)) {
-    
-    if(i == 1) {
-      p <-
-        p %>% 
-        leaflet::addPolylines(data = st.done.sf[st.done.sf$year == years[i],],
-                              group = years[i],
-                              label = ~htmltools::htmlEscape(as.character(index)))
-    } else {
-      p <-
-        p %>% 
-        leaflet::addPolylines(data = st.done.sf[st.done.sf$year == years[i],],
-                              group = years[i])
-    }
-  }
-  p %>% 
-    leaflet::addLayersControl(overlayGroups = years,
-                              options = leaflet::layersControlOptions(collapsed = FALSE))
+  m <-
+    mapview::mapview(res$sf$sf_older, map.types = c("Esri.OceanBasemap"),
+                     legend = FALSE,
+                     popup = FALSE,
+                     zcol = "ar") +
+    mapview::mapview(res$sf$sf_this_year,
+                     legend = FALSE,
+                     color = "red",
+                     lwd = 10)
+  m@map
 })
 
 ```
 
+```{r}
+knitr::opts_chunk$set(eval = FALSE)
+```
 
 
 Af aflabrögðum

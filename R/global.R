@@ -42,6 +42,8 @@ utils::globalVariables(
     
     "base", "gx", "gy", "lest", "p", "present", "total", "years",
     
+    ".id",
+    
     "."))
 
 

@@ -8,3 +8,5 @@
 ^data-raw$
 ^vignettes/articles$
 ^garbage
+^data-raw
+^data2
