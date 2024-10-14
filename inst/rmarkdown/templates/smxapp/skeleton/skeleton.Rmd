@@ -478,6 +478,7 @@ leaflet::renderLeaflet({
                      zcol = "ar") +
     mapview::mapview(res$sf$sf_this_year,
                      legend = FALSE,
+                     zcol = "stod",
                      color = "red",
                      lwd = 10)
   m@map
