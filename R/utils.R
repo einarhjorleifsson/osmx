@@ -54,7 +54,6 @@ grade <- function (x, dx) {
   return(x)
 }
 
-
 scale_longitude_ices <- function(min = -44, max = 68.5, step = 1, ...) {
   breaks <- seq(min + 0.5, max - 0.5, step)
   labels <- geo::d2ir(60, breaks) |>  stringr::str_sub(3)
@@ -64,4 +63,16 @@ scale_latitude_ices <- function(min = 36, max = 84.5, step = 0.5, ...) {
   breaks <- seq(min + 0.25, max - 0.25, step)
   labels <- geo::d2ir(breaks, 0) |>  stringr::str_sub(1, 2)
   return(ggplot2::scale_y_continuous(name = NULL, breaks = breaks, labels = labels, ...))
+}
+
+geo_convert <- function(x) {
+    i <- sign(x)
+    x <- abs(x)
+    x1 <- x%%10000
+    k <- c(1:length(x1))
+    k <- k[x1 > 5999 & !is.na(x1)]
+    if (length(k) > 0) 
+      print(paste("error > 60 min nr", k, x[k]))
+    min <- (x/100) - trunc(x/10000) * 100
+    return((i * (x + (200/3) * min))/10000)
 }

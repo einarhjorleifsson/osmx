@@ -42,6 +42,12 @@ utils::globalVariables(
     
     "base", "gx", "gy", "lest", "p", "present", "total", "years",
     
+    "dypi_hift_max", "dypi_hift_min", "dypi_kastad_max", "dypi_kastad_min",
+    "grandaralengd_max", "grandaralengd_min", "leidangur_id", "toglengd_max",
+    "toglengd_min", "vir_uti_max", "vir_uti_min",
+    
+    "to_char_hift_n", "to_char_hift_v", "to_char_kastad_n", "to_char_kastad_v",
+    
     ".id",
     
     "."))

@@ -112,6 +112,28 @@ sm_munge <- function(maelingar, stillingar, stodtoflur, current.year = lubridate
     stop("Fix the file path of setup files")
   }
   res$stillingar <- ovog::hv_import_stillingar(stillingar)
+  ### Correct variable names in sti_rallstodvar --------------------------------
+  coloured_print("Rename variables in sti_rallstodvar", colour = "cyan")
+  res$stillingar$sti_rallstodvar <-
+    res$stillingar$sti_rallstodvar |> 
+    dplyr::select(leidangur_id, reitur, smareitur, tognumer,
+                  kastad_v = to_char_kastad_v,
+                  kastad_n = to_char_kastad_n,
+                  hift_v = to_char_hift_v,
+                  hift_n = to_char_hift_n,
+                  toglengd = toglengd_min, toglengd_vik = toglengd_max,
+                  vir_uti = vir_uti_min,   vir_vik = vir_uti_max,
+                  grandaralengd = grandaralengd_min,
+                  grandaralengd_vik = grandaralengd_max,
+                  dypi_kastad = dypi_kastad_min,  dypi_kastad_vik = dypi_kastad_max,
+                  dypi_hift   = dypi_hift_min,    dypi_hift_vik = dypi_hift_max,
+                  lon1 = kastad_v, lat1 = kastad_n,
+                  lon2 = hift_v, lat2 = hift_n,
+                  dplyr::everything()) |> 
+    dplyr::mutate(lon1 = geo_convert(-lon1),
+                  lat1 = geo_convert(lat1),
+                  lon2 = geo_convert(-lon2),
+                  lat2 = geo_convert(lat2))
   
   ## Stodtoflur ----------------------------------------------------------------
   coloured_print("Import setup ('stodtoflur')", colour = "green")
@@ -308,7 +330,11 @@ sm_munge <- function(maelingar, stillingar, stodtoflur, current.year = lubridate
   ### Ratio relative to ungutted weight ----------------------------------------
   res$qc$range <- 
     ovog::hv_tidy_range(res$stillingar, long = FALSE)
+  ### Handbokartog -------------------------------------------------------------
   
+  
+  
+
   ## QC: Check length ranges ---------------------------------------------------
   
   ## QC: Check measurements ----------------------------------------------------
@@ -404,7 +430,34 @@ sm_munge <- function(maelingar, stillingar, stodtoflur, current.year = lubridate
     dplyr::left_join(stations_sf,
                      by = dplyr::join_by(.id)) |> 
     sf::st_as_sf()
-  res$sf <- list(sf_older = sf_older, sf_this_year = sf_this_year)
+  coloured_print("Handbokartog", colour = "green")
+  tmp <- 
+    res$stillingar$sti_rallstodvar |>
+    tidyr::drop_na(lon1, lat1, lon2, lat2) |> 
+    dplyr::mutate(.id = 1:dplyr::n())
+  
+  sf_handbok <- 
+    dplyr::bind_rows(
+      tmp |> 
+        dplyr::select(.id, lon1, lat1) |> 
+        sf::st_as_sf(coords = c("lon1", "lat1"),
+                     crs = 4326),
+      tmp |> 
+        dplyr::select(.id, lon2, lat2) |>
+        sf::st_as_sf(coords = c("lon2", "lat2"),
+                     crs = 4326)
+    ) |> 
+    dplyr::group_by(.id) |> 
+    dplyr::summarise(do_union = FALSE) |> 
+    sf::st_cast("LINESTRING") |> 
+    dplyr::ungroup() |> 
+    dplyr::left_join(tmp |> 
+                       dplyr::select(-c(lon1, lat1, lon2, lat2)),
+                     by = dplyr::join_by(.id)) |> 
+    dplyr::select(-.id)
+
+  
+  res$sf <- list(sf_older = sf_older, sf_this_year = sf_this_year, sf_handbok = sf_handbok)
   
   # ----------------------------------------------------------------------------
   coloured_print("Valblod", colour = "green")
@@ -422,9 +475,8 @@ sm_munge <- function(maelingar, stillingar, stodtoflur, current.year = lubridate
                        dplyr::select(tegund = species_no,
                                      name),
                      by = dplyr::join_by(tegund))
-  res$timi <- lubridate::now()
   
-  
+  res$timi <- lubridate::now() |> lubridate::floor_date(unit = "seconds")
   
   # THE BOOT ------------------------------------------------------------------
   res <- 

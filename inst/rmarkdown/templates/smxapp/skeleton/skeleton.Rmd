@@ -471,8 +471,12 @@ Column {.tabset}
 
 ```{r}
 leaflet::renderLeaflet({
-  m <-
-    mapview::mapview(res$sf$sf_older, map.types = c("Esri.OceanBasemap"),
+  m <- 
+    mapview::mapview(res$sf$sf_handbok, map.types = c("Esri.OceanBasemap"),
+                     legend = FALSE,
+                     color = "green",
+                     lwd = 10) +
+    mapview::mapview(res$sf$sf_older,
                      legend = FALSE,
                      popup = FALSE,
                      zcol = "ar") +
@@ -480,7 +484,7 @@ leaflet::renderLeaflet({
                      legend = FALSE,
                      zcol = "stod",
                      color = "red",
-                     lwd = 10)
+                     lwd = 8)
   m@map
 })
 
