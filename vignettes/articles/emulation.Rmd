@@ -27,7 +27,7 @@ One can read in the data currently being collected using the `hv_import_cruise` 
 ```{r}
 cruises <- here::here(c("data-raw/TB2-2024.zip", "data-raw/TTH1-2024.zip"))
 measurement <- 
-  ovog::hv_import_cruise(cruises) |> 
+  ovog::hv_import(cruises) |> 
   ovog::hv_create_tables()
 ```
 
@@ -81,7 +81,7 @@ res <- sm_munge(cruises, stillingar, stodtoflur)
 
 ```{r}
 res$by.length |> 
-  dplyr::filter(tegund == 2,
+  dplyr::filter(tegund == 1,
                 ar >= 2010) |> 
   dplyr::filter(var == "n") |> 
   sm_plot_lengths()
@@ -111,14 +111,14 @@ res$by.station |>
 
 ```{r}
 res$by.rect |> 
-  dplyr::filter(tegund == 4,
+  dplyr::filter(tegund == 1,
                 var == "n") |> 
   sm_plot_glyph()
 ```
 
 ```{r}
 res$by.rect |> 
-  dplyr::filter(tegund == 1,
+  dplyr::filter(tegund == 2,
                 var == "b") |> 
   sm_plot_glyph()
 ```

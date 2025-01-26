@@ -30,7 +30,7 @@ sm_munge <- function(maelingar, stillingar, stodtoflur, current.year = lubridate
     stop("Fix the file path of measurement files")
   }
   res <-
-    ovog::hv_import_cruise(maelingar, collapse_station = TRUE) |> 
+    ovog::hv_import(maelingar, collapse_station = TRUE) |> 
     # NOTE: no longer raised by counted
     ovog::hv_create_tables()
   
