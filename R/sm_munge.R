@@ -32,7 +32,7 @@ sm_munge <- function(maelingar, stillingar, stodtoflur, current.year = lubridate
   res <-
     ovog::hv_import(maelingar, collapse_station = TRUE) |> 
     # NOTE: no longer raised by counted
-    ovog::hv_create_tables()
+    ovog::hv_create_tables(scale = FALSE)
   
   res$stodvar <- 
     res$stodvar |> 
