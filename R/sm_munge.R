@@ -94,7 +94,8 @@ sm_munge <- function(maelingar, stillingar, stodtoflur, current.year = lubridate
   
   
   current.synaflokkur <- unique(res$stodvar$synaflokkur)
-  coloured_print(paste0("The 'synaflokkur' of the zip files is: ", current.synaflokkur), colour = "green") 
+  current.synaflokkur <- current.synaflokkur[current.synaflokkur %in% c(30, 35)]
+  coloured_print(paste0("The 'synaflokkur' of the zip files is: ", current.synaflokkur), colour = "green")
   if(length(current.synaflokkur) > 1) {
     stop(paste("There are more than one synaflokkur in the measurement files (",
                current.synaflokkur,
@@ -288,6 +289,22 @@ sm_munge <- function(maelingar, stillingar, stodtoflur, current.year = lubridate
     dplyr::filter(ar == max(ar)) |> 
     dplyr::select(leidangur, stod, index) |> 
     dplyr::arrange(leidangur, stod)
+  
+  check <- 
+    tmp |> 
+    dplyr::group_by(index) |> 
+    dplyr::mutate(n = dplyr::n_distinct(stod)) |> 
+    dplyr::ungroup() |> 
+    dplyr::filter(n > 1) |> 
+    dplyr::select(-n)
+  
+  if(nrow(check) > 1) {
+    warning("More than one index (reitur-tognúmer) in data, dropping all but the first one")
+    knitr::kable(check)
+    tmp <-
+      tmp |> 
+      dplyr::distinct(index, .keep_all = TRUE)
+  }
   
   res$timetrend <-
     tmp |> 
