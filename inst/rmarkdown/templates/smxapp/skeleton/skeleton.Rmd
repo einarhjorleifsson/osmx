@@ -20,7 +20,7 @@ remotes::install_local("R:/R/Pakkar/mardata", force = TRUE)
 ```{r get_data, eval = FALSE}
 # RUN THIS CHUNK line-by-line each time you dumped data to a zip file from Hafvog
 #  The paths to the zip-files (you may need to change this):
-maelingar <- c("data-raw/TB1-2025.zip", "data-raw/TTH1-2025.zip")
+maelingar <- c("data-raw/TB1-2026_2.zip", "data-raw/TTH1-2026.zip", "data-raw/A4-2026.zip")
 stillingar <- "data-raw/stillingar_SMB_rall_(botnfiskur) 1.zip"
 stodtoflur <- "data-raw/stodtoflur.zip"
 library(magrittr)
@@ -81,6 +81,7 @@ names(my.species) <- paste0(stringr::str_pad(res$tegundir$tegund, width = 3, pad
                             res$tegundir$name)
 my.cruises <- as.list(res$leidangrar)
 names(my.cruises) <- res$leidangrar
+max.year <- max(res$stodvar$ar, na.rm = TRUE)
 ```
 
 Sidebar {.sidebar data-width=175}
@@ -167,7 +168,7 @@ renderPlot({
 
 
 
-### Afli í staðaltogi árið `r 2024`
+### Afli í staðaltogi árið `r max.year`
 
 ```{r}
 renderPlot({
@@ -207,7 +208,7 @@ renderPlot({
     res$by.station |> 
     dplyr::filter(tegund == input$Species,
                   ar %in% c(seq(2000, 2015, by = 5),
-                            2017:2024))
+                            2017:max.year))
   
   if(input$Type == "Numbers") {
     tmp |> 
@@ -326,18 +327,21 @@ Column {.tabset}
 ### Lengdir - allar tegundir
 
 ```{r}
-renderTable({
+DT::renderDataTable({
   res$le.this.year |> 
     dplyr::filter(leidangur %in% input$Leidangur) |> 
     dplyr::filter(.l.ok != "ok") |> 
-    dplyr::select(-leidangur)
+    dplyr::select(-leidangur) |> 
+    DT::datatable(#filter = 'top',
+                  rownames = FALSE,
+                  options = list(dom = 't', paging = FALSE))
 })
 ```
 
 ### Kvarnir - allar tegundir
 
 ```{r}
-renderTable({
+DT::renderDataTable({
   res$kv.this.year |> 
     dplyr::filter(leidangur %in% input$Leidangur) |> 
     dplyr::filter(.l_osl == "check" | .l_sl == 
@@ -345,7 +349,10 @@ renderTable({
                     "check") |> 
     #dplyr::filter(leidangur %in% input$Leidangur) |> 
     dplyr::select(lest, tegund, nr, lengd, oslaegt, slaegt, kynfaeri, 
-                  lifur, .l_osl, .l_sl, .sl_osl, .kyn, .lif)
+                  lifur, .l_osl, .l_sl, .sl_osl, .kyn, .lif) |> 
+    DT::datatable(#filter = 'top',
+                  rownames = FALSE,
+                  options = list(dom = 't', paging = FALSE))
 })
 ```
 
@@ -362,7 +369,7 @@ DT::renderDataTable({
   res$pp |> 
     #dplyr::filter(leidangur %in% input$Leidangur) |>
     dplyr::select(lest, fiskur:heildarthyngd) |> 
-    DT::datatable(filter = 'top',
+    DT::datatable(#filter = 'top',
                   rownames = FALSE,
                   options = list(dom = 't', paging = FALSE))
 })
@@ -416,13 +423,16 @@ renderPlot({
 ### Samantekt per fisk
 
 ```{r}
-renderTable({
+DT::renderDataTable({
   res$pp |> 
     dplyr::filter(leidangur %in% input$Leidangur) |> 
     dplyr::group_by(leidangur, stod, fiskur, fnr, flengd, oslaegt, astand ) |> 
     dplyr::reframe(n = sum(n, na.rm = TRUE),
                    wt = sum(heildarthyngd, na.rm = TRUE)) |>
-    dplyr::mutate(magafylli = round(wt / oslaegt, 3)) 
+    dplyr::mutate(magafylli = round(wt / oslaegt, 3)) |> 
+    DT::datatable(#filter = 'top',
+                  rownames = FALSE,
+                  options = list(dom = 't', paging = FALSE))
 })
 ```
 
@@ -447,7 +457,7 @@ renderPlot({
 ### Stop making sense
 
 ```{r}
-renderTable({
+DT::renderDataTable({
   res$pp |> 
     dplyr::filter(leidangur == input$Leidangur) |> 
     dplyr::mutate(
@@ -457,7 +467,10 @@ renderTable({
         astand == 2 & heildarthyngd > 0 ~ "tómur en með þyngd",
         .default = NA)) |> 
     dplyr::filter(!is.na(check)) |> 
-    dplyr::select(check, lest, fiskur:heildarthyngd) 
+    dplyr::select(check, lest, fiskur:heildarthyngd) |> 
+    DT::datatable(#filter = 'top',
+                  rownames = FALSE,
+                  options = list(dom = 't', paging = FALSE))
 })
 ```
 
@@ -556,7 +569,7 @@ Column {.tabset}
 ### Afli
 
 ```{r}
-renderTable({
+DT::renderDataTable({
   now.year <- max(res$stodvar$ar)
   x <- 
     res$by.station |> 
@@ -578,11 +591,17 @@ renderTable({
   if(input$Type == "Numbers") {
     x |> 
       dplyr::select(tegund, starts_with("n.")) |> 
-      tidyr::drop_na()
+      tidyr::drop_na() |> 
+    DT::datatable(#filter = 'top',
+                  rownames = FALSE,
+                  options = list(dom = 't', paging = FALSE))
   } else {
     x |> 
       dplyr::select(tegund, starts_with("b.")) |> 
-      tidyr::drop_na()
+      tidyr::drop_na() |> 
+    DT::datatable(#filter = 'top',
+                  rownames = FALSE,
+                  options = list(dom = 't', paging = FALSE))
   }
   
 })
