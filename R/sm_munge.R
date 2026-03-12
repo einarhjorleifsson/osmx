@@ -609,7 +609,7 @@ sm_build_sf <- function(res) {
       lodrett_opnun, larett_opnun, vir_uti, yfirbordshiti, botnhiti,
       kastad_lengd, kastad_breidd, hift_lengd, hift_breidd
     ) |>
-    dplyr::mutate(.id = 1:dplyr::n()) |>
+    dplyr::mutate(.id = seq_len(dplyr::n())) |>
     # Stations missing any endpoint coordinate are dropped
     tidyr::drop_na(kastad_lengd, kastad_breidd, hift_lengd, hift_breidd)
 
@@ -645,7 +645,7 @@ sm_build_sf <- function(res) {
   tmp <-
     res$stillingar$sti_rallstodvar |>
     tidyr::drop_na(lon1, lat1, lon2, lat2) |>
-    dplyr::mutate(.id = 1:dplyr::n())
+    dplyr::mutate(.id = seq_len(dplyr::n()))
 
   sf_handbok <-
     dplyr::bind_rows(
