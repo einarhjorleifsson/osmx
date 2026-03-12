@@ -24,5 +24,7 @@ sm_munge(
 a list
 }
 \description{
-Prepares data for the smxapp
+Orchestrates the full data pipeline: import current measurements, import
+setup files, merge historical data, summarise catches, compute time trends,
+run QC checks, build spatial objects, and run the bootstrap.
 }

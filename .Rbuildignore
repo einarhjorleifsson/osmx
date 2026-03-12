@@ -10,3 +10,5 @@
 ^garbage
 ^data-raw
 ^data2
+^\.positai$
+^\.claude$
