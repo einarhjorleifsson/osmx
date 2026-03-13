@@ -86,6 +86,10 @@ sm_munge <- function(maelingar, stillingar, stodtoflur,
     dplyr::mutate(tegund = paste(tegund, name)) |>
     dplyr::select(-name)
 
+  # Drop intermediate objects only needed during the munge pipeline
+  res[c("lengdir", "numer", "skraning", "stodvar", "kvarnir",
+        "stillingar", "stodtoflur", "qc", "current.synaflokkur")] <- NULL
+
   coloured_print("\nHURRA!", "green")
   return(res)
 

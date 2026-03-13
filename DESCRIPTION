@@ -1,9 +1,9 @@
 Package: osmx
 Title: Visualize survey data
-Version: 2024-10-10
+Version: 2026-03-13
 Authors@R: 
     person("Einar", "Hjorleifsson", , "einar.hjorleifsson@gmail.com", role = c("aut", "cre"),
-           comment = c(ORCID = "YOUR-ORCID-ID"))
+           comment = c(ORCID = "0009-0004-2160-5380"))
 Description: osmx is a domain-specific R package for Icelandic groundfish survey data — merging historical (mardata) and current (hafvog) measurements, running QC checks, and powering an interactive Shiny dashboard ("Mælaborð Íslenzkra Ralla").
 License: CC BY 4.0
 Encoding: UTF-8

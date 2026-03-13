@@ -50,6 +50,8 @@ utils::globalVariables(
     
     ".id",
     
+    ".l.ok", "flengd",
+    
     "."))
 
 

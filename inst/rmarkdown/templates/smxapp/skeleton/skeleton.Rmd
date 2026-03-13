@@ -15,6 +15,9 @@ remotes::install_github("einarhjorleifsson/osmx")
 
 # This guy you hopefully installed recently, takes a while
 remotes::install_local("R:/R/Pakkar/mardata", force = TRUE)
+
+# Fast serialization and columnar storage (needed for data2/ files)
+# install.packages(c("qs2", "arrow"))
 ```
 
 ```{r get_data, eval = FALSE}
@@ -25,13 +28,20 @@ stillingar <- "data-raw/stillingar_SMB_rall_(botnfiskur) 1.zip"
 stodtoflur <- "data-raw/stodtoflur.zip"
 res <- osmx::sm_munge(maelingar, stillingar, stodtoflur)
 if(!dir.exists(here::here("data2"))) dir.create(here::here("data2"))
-res |> readr::write_rds(here::here("data2/res.rds"))
+# Save large data frames as Parquet (small files, fast reads), rest via qs
+arrow::write_parquet(res$by.station, here::here("data2/by_station.parquet"))
+arrow::write_parquet(res$by.rect,    here::here("data2/by_rect.parquet"))
+res$by.station <- NULL
+res$by.rect    <- NULL
+qs2::qs_save(res, here::here("data2/res.qs2"))
 ```
 
 <!-- DO NOT FIDDLE WITH STUFF BELOW, JUST PRESS "Run Document" -->
 
 ```{r smxapp}
-res <- readr::read_rds(here::here("data2/res.rds"))
+res            <- qs2::qs_read(here::here("data2/res.qs2"))
+res$by.station <- arrow::read_parquet(here::here("data2/by_station.parquet"))
+res$by.rect    <- arrow::read_parquet(here::here("data2/by_rect.parquet"))
 
 # Local aliases for brevity in sidebar inputs and inline Rmd expressions
 my.species <- res$my.species
