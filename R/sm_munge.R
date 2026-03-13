@@ -54,6 +54,38 @@ sm_munge <- function(maelingar, stillingar, stodtoflur,
 
   res <- sm_boot(res)
 
+  # App convenience fields ------------------------------------------------------
+  res$max.year <- max(res$stodvar$ar, na.rm = TRUE)
+
+  res$my.species <- as.list(res$tegundir$tegund)
+  names(res$my.species) <- paste0(
+    stringr::str_pad(res$tegundir$tegund, width = 3, pad = "0"),
+    "-",
+    res$tegundir$name
+  )
+
+  res$my.cruises <- as.list(res$leidangrar)
+  names(res$my.cruises) <- res$leidangrar
+
+  # Pre-compute catch summary table (wide format, split by Numbers/Weight in app)
+  res$afli_wide <-
+    res$by.station |>
+    dplyr::filter(ar == res$max.year) |>
+    dplyr::left_join(
+      res$stodvar |>
+        dplyr::filter(ar == res$max.year) |>
+        dplyr::select(index, leidangur)
+    ) |>
+    dplyr::group_by(leidangur, tegund, var) |>
+    dplyr::summarise(value = round(sum(val), 0), .groups = "drop") |>
+    dplyr::filter(value > 0) |>
+    dplyr::mutate(variable = paste0(var, ".", leidangur)) |>
+    dplyr::select(-leidangur) |>
+    tidyr::pivot_wider(names_from = variable, values_from = value) |>
+    dplyr::left_join(res$tegundir) |>
+    dplyr::mutate(tegund = paste(tegund, name)) |>
+    dplyr::select(-name)
+
   coloured_print("\nHURRA!", "green")
   return(res)
 
@@ -415,7 +447,31 @@ sm_summarise_catches <- function(res) {
       res$stodtoflur$species_v |> dplyr::select(sid = species_no, prey = name),
       by = dplyr::join_by(sid)
     ) |>
-    dplyr::select(leidangur:astand, prey, pnr:heildarthyngd)
+    dplyr::select(leidangur:astand, prey, pnr:heildarthyngd) |>
+    dplyr::mutate(
+      lest = stringr::str_sub(leidangur, 1, 4),
+      lest = stringr::str_remove(lest, "-"),
+      lest = paste0(lest, "-", stringr::str_pad(stod, width = 3, pad = "0")),
+      flengd  = as.integer(flengd),
+      oslaegt = as.integer(oslaegt),
+      astand  = as.integer(astand)
+    )
+
+  # Pre-compute top-20 prey and the filtered data that feeds the app plot
+  .pp_qc <- res$pp |>
+    dplyr::filter(astand == 1, !is.na(prey), !is.na(heildarthyngd), !is.na(n)) |>
+    dplyr::mutate(m.thyngd = round(heildarthyngd / n, 2))
+  res$top20_prey <- .pp_qc |>
+    dplyr::group_by(prey) |>
+    dplyr::summarise(
+      fjoldi = sum(n),
+      mean   = sum(heildarthyngd) / sum(n),
+      .groups = "drop"
+    ) |>
+    dplyr::arrange(-fjoldi) |>
+    dplyr::slice(1:20)
+  res$pp_for_prey <- .pp_qc |> dplyr::filter(prey %in% res$top20_prey$prey)
+  rm(.pp_qc)
 
   return(res)
 
@@ -562,14 +618,21 @@ sm_run_qc <- function(res) {
   res$kv.this.year <-
     res$kv.this.year |>
     dplyr::mutate(
-      lest =
-        # Not the best way to find shortcut for leidangur
-        paste0(
-          stringr::str_sub(leidangur, 1, 3) |> stringr::str_remove("-"),
-          "-",
-          stringr::str_pad(stod, pad = "0", width = 3)
-        ),
-      lestnr = paste0(lest, "-", nr)
+      lest = paste0(
+        stringr::str_sub(leidangur, 1, 4) |> stringr::str_remove("-"),
+        "-",
+        stringr::str_pad(stod, pad = "0", width = 3)
+      ),
+      lestnr     = paste0(lest, "-", nr),
+      lengd      = as.integer(lengd),
+      oslaegt    = as.integer(oslaegt),
+      slaegt     = as.integer(slaegt),
+      lifur      = as.integer(lifur),
+      kynfaeri   = as.integer(kynfaeri),
+      kyn        = as.integer(kyn),
+      kynthroski = as.integer(kynthroski),
+      magaastand = as.integer(magaastand),
+      stod       = as.integer(stod)
     ) |>
     dplyr::select(
       lest, tegund, nr, lengd, oslaegt, slaegt, lifur, kynfaeri,
@@ -577,6 +640,37 @@ sm_run_qc <- function(res) {
       dplyr::everything()
     ) |>
     dplyr::arrange(leidangur, stod, tegund, nr)
+
+  # Length QC table for the current year (flags lengths outside expected range)
+  res$le.this.year <-
+    res$stodvar |>
+    dplyr::filter(ar == max(ar)) |>
+    dplyr::select(leidangur, synis_id, stod) |>
+    dplyr::inner_join(
+      res$skraning |>
+        # TODO: Check this
+        dplyr::filter(maeliadgerd %in% c(1, 2, 3)),
+      by = dplyr::join_by(leidangur, synis_id)
+    ) |>
+    dplyr::mutate(
+      lest = stringr::str_sub(leidangur, 1, 4),
+      lest = stringr::str_remove(lest, "-"),
+      lest = paste0(lest, "-", stringr::str_pad(stod, width = 3, pad = "0"))
+    ) |>
+    dplyr::select(leidangur, lest, tegund, nr, lengd, kyn) |>
+    dplyr::left_join(
+      res$qc$range |>
+        dplyr::select(tegund, lengd_low, lengd_high) |>
+        dplyr::distinct(),
+      by = dplyr::join_by(tegund)
+    ) |>
+    dplyr::mutate(
+      .l.ok = dplyr::if_else(dplyr::between(lengd, lengd_low, lengd_high), "ok", "check", "na"),
+      nr    = as.integer(nr),
+      lengd = as.integer(floor(lengd)),
+      kyn   = as.integer(kyn)
+    ) |>
+    dplyr::select(leidangur, lest, tegund, nr, lengd, kyn, .l.ok)
 
   return(res)
 
