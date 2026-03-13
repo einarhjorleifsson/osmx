@@ -20,10 +20,10 @@ remotes::install_local("R:/R/Pakkar/mardata", force = TRUE)
 ```{r get_data, eval = FALSE}
 # RUN THIS CHUNK line-by-line each time you dumped data to a zip file from Hafvog
 #  The paths to the zip-files (you may need to change this):
-maelingar <- c("data-raw/TB1-2026_2.zip", "data-raw/TTH1-2026.zip", "data-raw/A4-2026.zip")
+maelingar <- c("data-raw/TB1-2026.zip", "data-raw/TTH1-2026.zip", "data-raw/A4-2026.zip", "data-raw/Þ3-2026.zip")
 stillingar <- "data-raw/stillingar_SMB_rall_(botnfiskur) 1.zip"
 stodtoflur <- "data-raw/stodtoflur.zip"
-library(magrittr)
+#library(magrittr)
 res <- osmx::sm_munge(maelingar, stillingar, stodtoflur)
 if(!dir.exists(here::here("data2"))) dir.create(here::here("data2"))
 res |> readr::write_rds(here::here("data2/res.rds"))
@@ -42,7 +42,9 @@ res$le.this.year <-
                       # TODO: Check this
                       dplyr::filter(maeliadgerd %in% c(1, 2, 3)),
                     by = dplyr::join_by(leidangur, synis_id)) |> 
-  dplyr::mutate(lest = paste0(leidangur, "_", stringr::str_pad(stod, width = 3, pad = "0"))) |> 
+  dplyr::mutate(lest = stringr::str_sub(leidangur, 1, 4),
+                lest = stringr::str_remove(lest, "-"),
+                lest = paste0(lest, "-", stringr::str_pad(stod, width = 3, pad = "0"))) |> 
   dplyr::select(leidangur, lest, tegund, nr, lengd, kyn) |> 
   dplyr::left_join(res$qc$range |> 
                      dplyr::select(tegund, lengd_low, lengd_high) |> 
@@ -66,7 +68,9 @@ res$kv.this.year <-
                 stod = as.integer(stod))
 res$pp <- 
   res$pp |> 
-  dplyr::mutate(lest = paste0(leidangur, "_", stringr::str_pad(stod, width = 3, pad = "0")),
+  dplyr::mutate(lest = stringr::str_sub(leidangur, 1, 4),
+                lest = stringr::str_remove(lest, "-"),
+                lest = paste0(lest, "-", stringr::str_pad(stod, width = 3, pad = "0")),
                 flengd = as.integer(flengd),
                 oslaegt = as.integer(oslaegt),
                 astand = as.integer(astand))
@@ -78,7 +82,6 @@ names(my.species) <- paste0(stringr::str_pad(res$tegundir$tegund, width = 3, pad
 my.cruises <- as.list(res$leidangrar)
 names(my.cruises) <- res$leidangrar
 max.year <- max(res$stodvar$ar, na.rm = TRUE)
-
 ```
 
 Sidebar {.sidebar data-width=175}
@@ -432,8 +435,6 @@ DT::renderDataTable({
                   options = list(dom = 't', paging = FALSE))
 })
 ```
-
-
 
 ### Dreifing á magafylli eftir tegundum
 

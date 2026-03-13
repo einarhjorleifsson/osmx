@@ -1,14 +1,15 @@
-boot = function(x, times=100) {
-  
-  # Get column name from input object
-  var = deparse(substitute(x))
-  var = gsub("^\\.\\$","", var)
-  
-  # Bootstrap 95% CI
-  cis = stats::quantile(replicate(times, mean(sample(x, replace=TRUE))), probs=c(0.025,0.975))
-  
-  # Return data frame of results
-  data.frame(var, n=length(x), mean=mean(x), lower.ci=cis[1], upper.ci=cis[2])
+# Internal helper: bootstrap mean and 95% CI for a numeric vector
+boot_ci <- function(x, times = 100) {
+  cis <- stats::quantile(
+    replicate(times, mean(sample(x, replace = TRUE))),
+    probs = c(0.025, 0.975)
+  )
+  tibble::tibble(
+    n        = length(x),
+    mean     = mean(x),
+    lower.ci = unname(cis[1]),
+    upper.ci = unname(cis[2])
+  )
 }
 
 #' Bootstrap catch per station per year
@@ -19,27 +20,10 @@ boot = function(x, times=100) {
 #' @export
 #'
 sm_boot <- function(res) {
-  
-  coloured_print("Bootstrapping abundance", "green")
-  by.station.boot.n <-
-    res$by.station |>
-    dplyr::filter(var == "n") |> 
-    dplyr::group_by(tegund, ar) |>
-    dplyr::do(boot(.$val)) |> 
-    dplyr::mutate(var = "n")
-  
-  coloured_print("\nBootstrapping biomass", "green")
-  
-  by.station.boot.b <-
-    res$by.station |>
-    dplyr::filter(var == "b") |> 
-    dplyr::group_by(tegund, ar) |>
-    dplyr::do(boot(.$val)) |> 
-    dplyr::mutate(var = "b")
-  
+  coloured_print("Bootstrapping", "green")
   res$boot <-
-    dplyr::bind_rows(by.station.boot.n, by.station.boot.b)
-
+    res$by.station |>
+    dplyr::group_by(tegund, ar, var) |>
+    dplyr::reframe(boot_ci(val))
   return(res)
 }
-
