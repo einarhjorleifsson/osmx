@@ -23,7 +23,6 @@ remotes::install_local("R:/R/Pakkar/mardata", force = TRUE)
 maelingar <- c("data-raw/TB1-2026.zip", "data-raw/TTH1-2026.zip", "data-raw/A4-2026.zip", "data-raw/Þ3-2026.zip")
 stillingar <- "data-raw/stillingar_SMB_rall_(botnfiskur) 1.zip"
 stodtoflur <- "data-raw/stodtoflur.zip"
-#library(magrittr)
 res <- osmx::sm_munge(maelingar, stillingar, stodtoflur)
 if(!dir.exists(here::here("data2"))) dir.create(here::here("data2"))
 res |> readr::write_rds(here::here("data2/res.rds"))
@@ -33,30 +32,32 @@ res |> readr::write_rds(here::here("data2/res.rds"))
 
 ```{r smxapp}
 res <- readr::read_rds(here::here("data2/res.rds"))
+
 # 2026 addendum - to be moved to {osmx}
-res$le.this.year <- 
-  res$stodvar |> 
+res$le.this.year <-
+  res$stodvar |>
   dplyr::filter(ar == max(ar)) |>
-  dplyr::select(leidangur, synis_id, stod) |> 
-  dplyr::inner_join(res$skraning |> 
+  dplyr::select(leidangur, synis_id, stod) |>
+  dplyr::inner_join(res$skraning |>
                       # TODO: Check this
                       dplyr::filter(maeliadgerd %in% c(1, 2, 3)),
-                    by = dplyr::join_by(leidangur, synis_id)) |> 
+                    by = dplyr::join_by(leidangur, synis_id)) |>
   dplyr::mutate(lest = stringr::str_sub(leidangur, 1, 4),
                 lest = stringr::str_remove(lest, "-"),
-                lest = paste0(lest, "-", stringr::str_pad(stod, width = 3, pad = "0"))) |> 
-  dplyr::select(leidangur, lest, tegund, nr, lengd, kyn) |> 
-  dplyr::left_join(res$qc$range |> 
-                     dplyr::select(tegund, lengd_low, lengd_high) |> 
+                lest = paste0(lest, "-", stringr::str_pad(stod, width = 3, pad = "0"))) |>
+  dplyr::select(leidangur, lest, tegund, nr, lengd, kyn) |>
+  dplyr::left_join(res$qc$range |>
+                     dplyr::select(tegund, lengd_low, lengd_high) |>
                      dplyr::distinct(),
-                   by = dplyr::join_by(tegund)) |> 
+                   by = dplyr::join_by(tegund)) |>
   dplyr::mutate(.l.ok = dplyr::if_else(dplyr::between(lengd, lengd_low, lengd_high), "ok", "check", "na"),
                 nr = as.integer(nr),
                 lengd = as.integer(floor(lengd)),
-                kyn = as.integer(kyn)) |> 
+                kyn = as.integer(kyn)) |>
   dplyr::select(leidangur, lest, tegund, nr, lengd, kyn, .l.ok)
+
 res$kv.this.year <-
-  res$kv.this.year |> 
+  res$kv.this.year |>
   dplyr::mutate(lengd = as.integer(lengd),
                 oslaegt = as.integer(oslaegt),
                 slaegt = as.integer(slaegt),
@@ -66,8 +67,9 @@ res$kv.this.year <-
                 kynthroski = as.integer(kynthroski),
                 magaastand = as.integer(magaastand),
                 stod = as.integer(stod))
-res$pp <- 
-  res$pp |> 
+
+res$pp <-
+  res$pp |>
   dplyr::mutate(lest = stringr::str_sub(leidangur, 1, 4),
                 lest = stringr::str_remove(lest, "-"),
                 lest = paste0(lest, "-", stringr::str_pad(stod, width = 3, pad = "0")),
@@ -82,7 +84,42 @@ names(my.species) <- paste0(stringr::str_pad(res$tegundir$tegund, width = 3, pad
 my.cruises <- as.list(res$leidangrar)
 names(my.cruises) <- res$leidangrar
 max.year <- max(res$stodvar$ar, na.rm = TRUE)
+
+# Pre-compute top-20 prey (static - no reactive inputs needed)
+.pp_qc <- res$pp |>
+  dplyr::filter(astand == 1, !is.na(prey), !is.na(heildarthyngd), !is.na(n)) |>
+  dplyr::mutate(m.thyngd = round(heildarthyngd / n, 2))
+top20_prey <- .pp_qc |>
+  dplyr::group_by(prey) |>
+  dplyr::summarise(fjoldi = sum(n), mean = sum(heildarthyngd) / sum(n), .groups = "drop") |>
+  dplyr::arrange(-fjoldi) |>
+  dplyr::slice(1:20)
+# Pre-filtered to top-20 prey; only leidangur filter remains reactive
+pp_for_prey <- .pp_qc |> dplyr::filter(prey %in% top20_prey$prey)
+rm(.pp_qc)
+
+# Pre-compute catch summary table (static - no reactive inputs needed)
+# Only the Numbers/Weight column selection remains reactive
+afli_wide <-
+  res$by.station |>
+  dplyr::filter(ar == max.year) |>
+  dplyr::left_join(
+    res$stodvar |>
+      dplyr::filter(ar == max.year) |>
+      dplyr::select(index, leidangur)
+  ) |>
+  dplyr::group_by(leidangur, tegund, var) |>
+  dplyr::summarise(value = round(sum(val), 0), .groups = "drop") |>
+  dplyr::filter(value > 0) |>
+  dplyr::mutate(variable = paste0(var, ".", leidangur)) |>
+  dplyr::select(-leidangur) |>
+  tidyr::pivot_wider(names_from = variable, values_from = value) |>
+  dplyr::left_join(res$tegundir) |>
+  dplyr::mutate(tegund = paste(tegund, name)) |>
+  dplyr::select(-name)
 ```
+
+
 
 Sidebar {.sidebar data-width=175}
 =====================================
@@ -91,17 +128,50 @@ Sidebar {.sidebar data-width=175}
 selectInput(inputId = "Species", label = "Tegund:",
             choices = my.species, selected = 1)
 
-
-radioButtons(inputId = "Type", label = "Val:", 
+radioButtons(inputId = "Type", label = "Val:",
              choices = list("Numbers", "Weight"),
              selected = list("Numbers"))
 
 checkboxGroupInput(inputId = "Leidangur", label = "Leidangur:",
                    choices = my.cruises, selected = my.cruises)
+
+# Reactive helpers - each computed once per input change, shared across all renders
+selected_var <- reactive(if (input$Type == "Numbers") "n" else "b")
+
+by_station_sp <- reactive(
+  res$by.station |> dplyr::filter(tegund == as.numeric(input$Species))
+)
+
+by_length_sp <- reactive(
+  res$by.length |>
+    dplyr::filter(tegund == as.numeric(input$Species), ar >= 2010)
+)
+
+boot_sp <- reactive(
+  res$boot |> dplyr::filter(tegund == as.numeric(input$Species))
+)
+
+by_rect_sp <- reactive(
+  res$by.rect |> dplyr::filter(tegund == as.numeric(input$Species))
+)
+
+p_capture_sp <- reactive(
+  res$p_capture |> dplyr::filter(tegund == as.numeric(input$Species))
+)
+
+# Shared stomach computation: grouping + magafylli, reactive on leidangur only
+per_fish_stomachs <- reactive({
+  res$pp |>
+    dplyr::filter(leidangur %in% input$Leidangur) |>
+    dplyr::group_by(leidangur, stod, fiskur, fnr, flengd, oslaegt, astand) |>
+    dplyr::reframe(n = sum(n, na.rm = TRUE),
+                   wt = sum(heildarthyngd, na.rm = TRUE)) |>
+    dplyr::mutate(magafylli = round(wt / oslaegt, 3))
+})
 ```
 
 
-Síðast uppfært: 
+Síðast uppfært:
 
 `r as.character(res$timi)`
 
@@ -112,58 +182,34 @@ Dót til prufu - um kóðann sem er á bak við má fræðast um nánar [hér](h
 
 
 Forsíða
-=====================================  
+=====================================
 
-Column 
+Column
 -------------------------------------
 
 ### Eftir lengd
 
-
 ```{r}
 renderPlot({
-  if(input$Type == "Numbers")
-  {
-    res$by.length |> 
-      dplyr::filter(tegund == as.numeric(input$Species),
-                    ar >= 2010) |> 
-      dplyr::filter(var == "n") |> 
-      osmx::sm_plot_lengths()
-  } else {
-    res$by.length |> 
-      dplyr::filter(tegund == as.numeric(input$Species),
-                    ar >= 2010) |> 
-      dplyr::filter(var == "b") |> 
-      osmx::sm_plot_lengths()
-  }
+  by_length_sp() |>
+    dplyr::filter(var == selected_var()) |>
+    osmx::sm_plot_lengths()
 })
-
 ```
 
 
 
-Column 
+Column
 -------------------------------------
 
 ### Meðalafli - hártogun með staðalvikmörkum
 
-
 ```{r}
 renderPlot({
-  if(input$Type == "Numbers") 
-  {
-    res$boot |> 
-      dplyr::filter(tegund == input$Species,
-                    var == "n") |> 
-      osmx::sm_plot_boot()
-  } else {
-    res$boot |> 
-      dplyr::filter(tegund == input$Species,
-                    var == "b") |> 
-      osmx::sm_plot_boot()
-  }
+  boot_sp() |>
+    dplyr::filter(var == selected_var()) |>
+    osmx::sm_plot_boot()
 })
-
 ```
 
 
@@ -172,23 +218,10 @@ renderPlot({
 
 ```{r}
 renderPlot({
-  
-  tmp <- 
-    res$by.station |> 
-    dplyr::filter(tegund == input$Species,
-                  ar == max(ar))
-  
-  if(input$Type == "Numbers") {
-    tmp |> 
-      dplyr::filter(var == "n") |> 
-      osmx::sm_plot_bubble()
-  } else {
-    tmp |> 
-      dplyr::filter(var == "b") |> 
-      osmx::sm_plot_bubble()
-  }
+  by_station_sp() |>
+    dplyr::filter(ar == max(ar), var == selected_var()) |>
+    osmx::sm_plot_bubble()
 })
-
 ```
 
 
@@ -203,22 +236,12 @@ Column {.tabset}
 
 ```{r}
 renderPlot({
-  
-  tmp <- 
-    res$by.station |> 
-    dplyr::filter(tegund == input$Species,
-                  ar %in% c(seq(2000, 2015, by = 5),
-                            2017:max.year))
-  
-  if(input$Type == "Numbers") {
-    tmp |> 
-      dplyr::filter(var == "n") |> 
-      osmx::sm_plot_bubble()
-  } else {
-    tmp |> 
-      dplyr::filter(var == "b") |> 
-      osmx::sm_plot_bubble()
-  }
+  by_station_sp() |>
+    dplyr::filter(
+      ar %in% c(seq(2000, 2015, by = 5), 2017:max.year),
+      var == selected_var()
+    ) |>
+    osmx::sm_plot_bubble()
 })
 ```
 
@@ -227,17 +250,9 @@ renderPlot({
 
 ```{r}
 renderPlot({
-  if(input$Type == "Numbers") {
-    res$by.rect |> 
-      dplyr::filter(tegund == input$Species,
-                    var == "n") |> 
-      osmx::sm_plot_glyph()
-  } else {
-    res$by.rect |> 
-      dplyr::filter(tegund == input$Species,
-                    var == "b") |> 
-      osmx::sm_plot_glyph()
-  }
+  by_rect_sp() |>
+    dplyr::filter(var == selected_var()) |>
+    osmx::sm_plot_glyph()
 })
 ```
 
@@ -248,15 +263,13 @@ renderPlot({
 
 ```{r}
 renderPlot({
-  tmp <- 
-    res$by.station |> 
-    dplyr::filter(ar == max(ar), tegund == input$Species, var == "n") |> 
-    dplyr::mutate(val = ifelse(val == 0, "absent", "present")) |> 
+  tmp <- by_station_sp() |>
+    dplyr::filter(ar == max(ar), var == "n") |>
+    dplyr::mutate(val = ifelse(val == 0, "absent", "present")) |>
     dplyr::select(lon, lat, val)
-  res$p_capture |> 
-    dplyr::filter(tegund == input$Species) |> 
+  p_capture_sp() |>
     osmx::sm_plot_probability() +
-    ggplot2::geom_point(data = tmp, 
+    ggplot2::geom_point(data = tmp,
                         ggplot2::aes(lon, lat, colour = val),
                         size = 2) +
     ggplot2::scale_colour_manual(values = c("present" = "cyan", "absent" = "white"),
@@ -328,12 +341,11 @@ Column {.tabset}
 
 ```{r}
 DT::renderDataTable({
-  res$le.this.year |> 
-    dplyr::filter(leidangur %in% input$Leidangur) |> 
-    dplyr::filter(.l.ok != "ok") |> 
-    dplyr::select(-leidangur) |> 
-    DT::datatable(#filter = 'top',
-                  rownames = FALSE,
+  res$le.this.year |>
+    dplyr::filter(leidangur %in% input$Leidangur) |>
+    dplyr::filter(.l.ok != "ok") |>
+    dplyr::select(-leidangur) |>
+    DT::datatable(rownames = FALSE,
                   options = list(dom = 't', paging = FALSE))
 })
 ```
@@ -342,16 +354,14 @@ DT::renderDataTable({
 
 ```{r}
 DT::renderDataTable({
-  res$kv.this.year |> 
-    dplyr::filter(leidangur %in% input$Leidangur) |> 
-    dplyr::filter(.l_osl == "check" | .l_sl == 
-                    "check" | .sl_osl == "check" | .kyn == "check" | .lif == 
-                    "check") |> 
-    #dplyr::filter(leidangur %in% input$Leidangur) |> 
-    dplyr::select(lest, tegund, nr, lengd, oslaegt, slaegt, kynfaeri, 
-                  lifur, .l_osl, .l_sl, .sl_osl, .kyn, .lif) |> 
-    DT::datatable(#filter = 'top',
-                  rownames = FALSE,
+  res$kv.this.year |>
+    dplyr::filter(leidangur %in% input$Leidangur) |>
+    dplyr::filter(.l_osl == "check" | .l_sl ==
+                    "check" | .sl_osl == "check" | .kyn == "check" | .lif ==
+                    "check") |>
+    dplyr::select(lest, tegund, nr, lengd, oslaegt, slaegt, kynfaeri,
+                  lifur, .l_osl, .l_sl, .sl_osl, .kyn, .lif) |>
+    DT::datatable(rownames = FALSE,
                   options = list(dom = 't', paging = FALSE))
 })
 ```
@@ -366,11 +376,10 @@ Column {.tabset}
 
 ```{r}
 DT::renderDataTable({
-  res$pp |> 
-    #dplyr::filter(leidangur %in% input$Leidangur) |>
-    dplyr::select(lest, fiskur:heildarthyngd) |> 
-    DT::datatable(#filter = 'top',
-                  rownames = FALSE,
+  # Note: leidangur filter intentionally disabled - shows all data across cruises
+  res$pp |>
+    dplyr::select(lest, fiskur:heildarthyngd) |>
+    DT::datatable(rownames = FALSE,
                   options = list(dom = 't', paging = FALSE))
 })
 ```
@@ -379,40 +388,12 @@ DT::renderDataTable({
 
 ```{r}
 renderPlot({
-  pp <- 
-    res$pp |> 
-    dplyr::filter(astand == 1,
-                  # brað verdur ad vera skilgreind
-                  !is.na(prey),
-                  # verður að hafa mælingu thyngd
-                  !is.na(heildarthyngd),
-                  # verður að hafa mælingu talid
-                  !is.na(n)) |> 
-    dplyr::mutate(m.thyngd = round(heildarthyngd / n, 2))
-  
-  # not really mean based on individual prey measurements
-  pp.mean <- 
-    pp |> 
-    dplyr::group_by(prey) |> 
-    dplyr::summarise(fjoldi = sum(n),
-                     mean = sum(heildarthyngd) / sum(n)) |> 
-    dplyr::ungroup() |> 
-    dplyr::arrange(-fjoldi)
-  
-  # top 20 (bráð) tegundir "mældar"
-  top20 <-
-    pp.mean |> 
-    dplyr::slice(1:20)
-  top20.brad <-
-    top20 |> 
-    dplyr::pull(prey)
-  
-  pp |> 
-    dplyr::filter(leidangur %in% input$Leidangur) |> 
-    dplyr::filter(prey %in% top20.brad) |> 
+  # top20_prey and pp_for_prey are pre-computed at startup; only leidangur filter is reactive
+  pp_for_prey |>
+    dplyr::filter(leidangur %in% input$Leidangur) |>
     ggplot2::ggplot() +
     ggplot2::geom_histogram(ggplot2::aes(m.thyngd)) +
-    ggplot2::geom_vline(data = top20, 
+    ggplot2::geom_vline(data = top20_prey,
                         ggplot2::aes(xintercept = mean), colour = "red") +
     ggplot2::facet_wrap(~ prey, scale = "free") +
     ggplot2::labs(x = "Meðalþyngd", y = "Fjöldi")
@@ -424,14 +405,8 @@ renderPlot({
 
 ```{r}
 DT::renderDataTable({
-  res$pp |> 
-    dplyr::filter(leidangur %in% input$Leidangur) |> 
-    dplyr::group_by(leidangur, stod, fiskur, fnr, flengd, oslaegt, astand ) |> 
-    dplyr::reframe(n = sum(n, na.rm = TRUE),
-                   wt = sum(heildarthyngd, na.rm = TRUE)) |>
-    dplyr::mutate(magafylli = round(wt / oslaegt, 3)) |> 
-    DT::datatable(#filter = 'top',
-                  rownames = FALSE,
+  per_fish_stomachs() |>
+    DT::datatable(rownames = FALSE,
                   options = list(dom = 't', paging = FALSE))
 })
 ```
@@ -440,14 +415,7 @@ DT::renderDataTable({
 
 ```{r}
 renderPlot({
-  tmp <- 
-    res$pp |> 
-    dplyr::filter(leidangur %in% input$Leidangur) |> 
-    dplyr::group_by(leidangur, stod, fiskur, fnr, flengd, oslaegt, astand ) |> 
-    dplyr::reframe(n = sum(n, na.rm = TRUE),
-                   wt = sum(heildarthyngd, na.rm = TRUE)) |>
-    dplyr::mutate(magafylli = round(wt / oslaegt, 3)) 
-  tmp |> 
+  per_fish_stomachs() |>
     ggplot2::ggplot() +
     ggplot2::geom_histogram(ggplot2::aes(magafylli)) +
     ggplot2::facet_wrap(~ fiskur, scales = "free")
@@ -458,18 +426,17 @@ renderPlot({
 
 ```{r}
 DT::renderDataTable({
-  res$pp |> 
-    dplyr::filter(leidangur == input$Leidangur) |> 
+  res$pp |>
+    dplyr::filter(leidangur %in% input$Leidangur) |>
     dplyr::mutate(
       check = dplyr::case_when(
         astand == 1 & is.na(heildarthyngd) ~ "engin heildarþyngd",
         astand == 1 & heildarthyngd == 0 ~ "bráð 0 grömm",
         astand == 2 & heildarthyngd > 0 ~ "tómur en með þyngd",
-        .default = NA)) |> 
-    dplyr::filter(!is.na(check)) |> 
-    dplyr::select(check, lest, fiskur:heildarthyngd) |> 
-    DT::datatable(#filter = 'top',
-                  rownames = FALSE,
+        .default = NA)) |>
+    dplyr::filter(!is.na(check)) |>
+    dplyr::select(check, lest, fiskur:heildarthyngd) |>
+    DT::datatable(rownames = FALSE,
                   options = list(dom = 't', paging = FALSE))
 })
 ```
@@ -486,9 +453,9 @@ Column {.tabset}
 
 ```{r}
 renderPlot({
-  res$timetrend.20 |> 
+  res$timetrend.20 |>
     dplyr::filter(leidangur %in% input$Leidangur,
-                  var %in% c("larett_opnun", "lodrett_opnun", "vir_uti")) |> 
+                  var %in% c("larett_opnun", "lodrett_opnun", "vir_uti")) |>
     osmx::sm_plot_last20()
 })
 ```
@@ -497,9 +464,9 @@ renderPlot({
 
 ```{r}
 renderPlot({
-  res$timetrend.20 |> 
+  res$timetrend.20 |>
     dplyr::filter(leidangur %in% input$Leidangur,
-                  var %in% c("botnhiti", "yfirbordshiti")) |> 
+                  var %in% c("botnhiti", "yfirbordshiti")) |>
     osmx::sm_plot_last20()
 })
 ```
@@ -508,11 +475,10 @@ renderPlot({
 
 ```{r}
 renderPlot({
-  res$timetrend |> 
+  res$timetrend |>
     dplyr::filter(leidangur %in% input$Leidangur,
-                  var %in% c("larett_opnun", "lodrett_opnun", "vir_uti")) |> 
+                  var %in% c("larett_opnun", "lodrett_opnun", "vir_uti")) |>
     osmx::sm_plot_violin()
-  
 })
 ```
 
@@ -520,11 +486,10 @@ renderPlot({
 
 ```{r}
 renderPlot({
-  res$timetrend |> 
+  res$timetrend |>
     dplyr::filter(leidangur %in% input$Leidangur,
-                  var %in% c("botnhiti", "yfirbordshiti")) |> 
+                  var %in% c("botnhiti", "yfirbordshiti")) |>
     osmx::sm_plot_violin()
-  
 })
 ```
 
@@ -539,7 +504,7 @@ Column {.tabset}
 
 ```{r}
 leaflet::renderLeaflet({
-  m <- 
+  m <-
     mapview::mapview(res$sf$sf_handbok, map.types = c("Esri.OceanBasemap"),
                      legend = FALSE,
                      color = "green",
@@ -570,110 +535,13 @@ Column {.tabset}
 
 ```{r}
 DT::renderDataTable({
-  now.year <- max(res$stodvar$ar)
-  x <- 
-    res$by.station |> 
-    dplyr::filter(ar == now.year) |> 
-    dplyr::left_join(res$stodvar |> 
-                       dplyr::filter(ar == now.year) |> 
-                       dplyr::select(index, leidangur)) |> 
-    dplyr::group_by(leidangur, tegund, var) |> 
-    dplyr::summarise(value = round(sum(val), 0),
-                     .groups = "drop") |> 
-    dplyr::filter(value > 0) |> 
-    dplyr::mutate(variable = paste0(var, ".", leidangur)) |> 
-    dplyr::ungroup() |> 
-    dplyr::select(-leidangur) |> 
-    tidyr::spread(variable, value) |>
-    dplyr::left_join(res$tegundir) |> 
-    dplyr::mutate(tegund = paste(tegund, name)) |> 
-    dplyr::select(-name)
-  if(input$Type == "Numbers") {
-    x |> 
-      dplyr::select(tegund, starts_with("n.")) |> 
-      tidyr::drop_na() |> 
-    DT::datatable(#filter = 'top',
-                  rownames = FALSE,
+  # afli_wide is pre-computed at startup; only Numbers/Weight selection is reactive
+  afli_wide |>
+    dplyr::filter(var == selected_var()) |>
+    dplyr::select(tegund, dplyr::starts_with(paste0(selected_var(), "."))) |>
+    tidyr::drop_na() |>
+    DT::datatable(rownames = FALSE,
                   options = list(dom = 't', paging = FALSE))
-  } else {
-    x |> 
-      dplyr::select(tegund, starts_with("b.")) |> 
-      tidyr::drop_na() |> 
-    DT::datatable(#filter = 'top',
-                  rownames = FALSE,
-                  options = list(dom = 't', paging = FALSE))
-  }
-  
 })
 
-```
-
-```{r}
-knitr::opts_chunk$set(eval = FALSE)
-```
-
-
-```{r}
-renderPlot({
-  
-  MAELINGAR |> 
-    ggplot2::ggplot(ggplot2::aes(rel.time, n.cum, colour = leidangur)) +
-    ggplot2::theme_grey(base_size = 16) +
-    ggplot2::geom_step(lwd = 1) +
-    ggplot2::facet_wrap(~ heiti, scale = "free_y") +
-    ggplot2::expand_limits(y = 0) +
-    ggplot2::labs(x = "Dagar frá fyrstu stöð",
-                  y = "Fjöldi",
-                  colour = "Leiðangur") +
-    ggplot2::scale_color_brewer(palette = "Set1")
-})
-```
-
-
-```{r}
-renderPlot({
-  
-  skr <- 
-    readr::read_rds("data2/res.rds")$skraning |> 
-    dplyr::filter(tegund == input$Species) |> 
-    dplyr::group_by(synis_id, maeliadgerd) |> 
-    dplyr::summarise(n = sum(fjoldi)) |> 
-    dplyr::ungroup()
-  st2 <- 
-    st |> 
-    dplyr::filter(ar == now.year) |> 
-    dplyr::select(synis_id,
-                  leidangur,
-                  time = togbyrjun) |> 
-    dplyr::group_by(leidangur) |> 
-    dplyr::mutate(start.time = min(time),
-                  rel.time = as.numeric(time - start.time) / (60 * 60 * 24),
-                  max.time = max(rel.time)) |> 
-    dplyr::select(leidangur, rel.time, max.time, synis_id) |> 
-    dplyr::ungroup() |> 
-    dplyr::left_join(skr) |> 
-    dplyr::arrange(rel.time) |> 
-    tidyr::complete(rel.time, tidyr::nesting(leidangur, maeliadgerd), 
-                    fill = list(n = 0)) |> 
-    dplyr::group_by(rel.time, leidangur) |> 
-    tidyr::fill(max.time) |> 
-    dplyr::filter(rel.time <= max.time) |> 
-    dplyr::arrange(rel.time) |> 
-    dplyr::left_join(maeliatridi) |> 
-    dplyr::group_by(leidangur, heiti) |> 
-    dplyr::mutate(n.cum = cumsum(n)) |> 
-    dplyr::ungroup()
-  
-  
-  st2 |> 
-    ggplot2::ggplot(ggplot2::aes(rel.time, n.cum, colour = leidangur)) +
-    ggplot2::geom_step(lwd = 1) +
-    ggplot2::theme_grey(base_size = 16) +
-    ggplot2::facet_wrap(~ heiti, scale = "free_y") +
-    ggplot2::expand_limits(y = 0) +
-    ggplot2::labs(x = "Dagar frá fyrstu stöð",
-                  y = "Fjöldi",
-                  colour = "Leiðangur") +
-    ggplot2::scale_color_brewer(palette = "Set1")
-})
 ```
